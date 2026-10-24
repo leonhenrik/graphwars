@@ -5,7 +5,6 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   error: string | null;
-  onPreview: () => void;
   onFire: () => void;
   onToggleDirection: () => void;
   direction: 1 | -1;
@@ -37,11 +36,11 @@ const KEYS: Key[] = [
   fn('log'), fn('ln'), fn('exp'), { label: 'π', insert: 'pi', kind: 'op' }, { label: 'e', kind: 'op' },
 ];
 
-export function FunctionInput({
+/** The on-phone calculator: a display of y = f(x), a keypad, the direction flip and the fire button. */
+export function Calculator({
   value,
   onChange,
   error,
-  onPreview,
   onFire,
   onToggleDirection,
   direction,
@@ -60,43 +59,29 @@ export function FunctionInput({
     }
   });
 
-  const edit = (build: (before: string, after: string) => { text: string; caret: number }) => {
+  const selection = () => {
     const el = inputRef.current;
-    const start = el?.selectionStart ?? value.length;
-    const end = el?.selectionEnd ?? value.length;
-    const result = build(value.slice(0, start), value.slice(end));
-    pendingCaret.current = result.caret;
-    onChange(result.text);
-    el?.focus();
+    return { start: el?.selectionStart ?? value.length, end: el?.selectionEnd ?? value.length };
   };
 
   const press = (key: Key) => {
     if (disabled) return;
+    const { start, end } = selection();
     if (key.label === '⌫') {
-      const el = inputRef.current;
-      const start = el?.selectionStart ?? value.length;
-      const end = el?.selectionEnd ?? value.length;
-      if (start === end) {
-        if (start === 0) return;
-        pendingCaret.current = start - 1;
-        onChange(value.slice(0, start - 1) + value.slice(end));
-      } else {
-        pendingCaret.current = start;
-        onChange(value.slice(0, start) + value.slice(end));
-      }
-      el?.focus();
-      return;
+      if (start === end && start === 0) return;
+      const from = start === end ? start - 1 : start;
+      pendingCaret.current = from;
+      onChange(value.slice(0, from) + value.slice(end));
+    } else {
+      const text = key.insert ?? key.label;
+      pendingCaret.current = start + text.length + (key.caret ?? 0);
+      onChange(value.slice(0, start) + text + value.slice(end));
     }
-    const text = key.insert ?? key.label;
-    edit((before, after) => ({
-      text: before + text + after,
-      caret: before.length + text.length + (key.caret ?? 0),
-    }));
+    inputRef.current?.focus();
   };
 
   return (
-    <section className="panel-section" aria-label="Function">
-      <h2>Your shot</h2>
+    <section className="calculator" aria-label="Calculator">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -113,8 +98,11 @@ export function FunctionInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
+          // No on-screen keyboard on phones: the keypad below is the input.
+          inputMode="none"
           spellCheck={false}
           autoComplete="off"
+          autoCapitalize="off"
           maxLength={200}
           aria-invalid={error !== null}
           aria-describedby="fn-error"
@@ -124,7 +112,7 @@ export function FunctionInput({
           {error}
         </div>
 
-        <div className="keypad" role="group" aria-label="Calculator">
+        <div className="keypad" role="group" aria-label="Keypad">
           {KEYS.map((key) => (
             <button
               key={key.label}
@@ -163,21 +151,16 @@ export function FunctionInput({
           x direction: {direction === 1 ? 'right →' : '← left'} (flip)
         </button>
 
-        <div className="button-row">
-          <button type="button" className="btn" onClick={onPreview} disabled={disabled}>
-            Preview
-          </button>
-          <button type="submit" className="btn primary" disabled={!canFire}>
-            {fireLabel}
-          </button>
-        </div>
+        <button type="submit" className="btn primary fire" disabled={!canFire} data-testid="fire-button">
+          {fireLabel}
+        </button>
       </form>
       <details className="syntax">
         <summary>Syntax help</summary>
         <p>
           Variable <code>x</code>; operators <code>+ - * / ^</code>, parentheses. Functions:{' '}
-          <code>sin cos tan sqrt abs log ln exp</code> (<code>log</code> is base 10, <code>ln</code> natural).
-          Constants: <code>pi</code>, <code>e</code>.
+          <code>sin cos tan sqrt abs log ln exp</code> (<code>log</code> is base 10). Constants: <code>pi</code>,{' '}
+          <code>e</code>.
         </p>
         <p className="examples">
           {EXPRESSION_EXAMPLES.map((ex) => (
@@ -187,9 +170,8 @@ export function FunctionInput({
           ))}
         </p>
         <p>
-          You are always the origin (0, 0): x is measured from you, positive in the shooting direction, and the curve
-          is shifted so it starts at you. Flip the direction to mirror the shot. The first thing the curve touches is
-          hit.
+          You are always the origin (0, 0): x is measured from you, positive in the shooting direction. Flip the
+          direction to mirror the shot. The first thing the curve touches is hit.
         </p>
       </details>
     </section>

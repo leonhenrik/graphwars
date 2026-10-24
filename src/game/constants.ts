@@ -15,5 +15,6 @@ export const MAX_PLAYERS = 6;
 
 export const MAX_EXPRESSION_LENGTH = 120;
 export const MAX_EXPRESSION_NODES = 150;
+export const DEFAULT_EXPRESSION = 'sin(x)';
 
 export const PLAYER_COLORS = ['#38bdf8', '#fb923c', '#4ade80', '#f472b6', '#facc15', '#a78bfa'] as const;

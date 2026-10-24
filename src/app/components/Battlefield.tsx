@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { GameState, ShotDirection, ShotResult, TrajectoryPoint } from '../../game/types';
 import { drawScene, partialPath, pathLength, EFFECT_DURATION_MS, type Effect } from './render';
 
@@ -15,22 +15,12 @@ interface Props {
   preview: TrajectoryPoint[] | null;
   animation: ShotAnimation | null;
   effects: Effect[];
-  onSoldierClick: (soldierId: string) => void;
   onAnimationComplete: (animationId: number) => void;
 }
 
 const UNITS_PER_SECOND = 32;
 
-export function Battlefield({
-  state,
-  activeId,
-  direction,
-  preview,
-  animation,
-  effects,
-  onSoldierClick,
-  onAnimationComplete,
-}: Props) {
+export function Battlefield({ state, activeId, direction, preview, animation, effects, onAnimationComplete }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -131,32 +121,12 @@ export function Battlefield({
     return () => cancelAnimationFrame(raf);
   }, [size]);
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width === 0) return;
-      const scale = rect.width / (bounds.maxX - bounds.minX);
-      const wx = bounds.minX + (e.clientX - rect.left) / scale;
-      const wy = bounds.maxY - (e.clientY - rect.top) / scale;
-      let best: { id: string; d: number } | null = null;
-      for (const s of state.soldiers) {
-        const d = Math.hypot(s.x - wx, s.y - wy);
-        if (d <= s.radius + 0.6 && (best === null || d < best.d)) best = { id: s.id, d };
-      }
-      if (best) onSoldierClick(best.id);
-    },
-    [bounds, state.soldiers, onSoldierClick],
-  );
-
   return (
     <div className="battlefield-wrap" ref={wrapRef}>
       <canvas
         ref={canvasRef}
         className="battlefield-canvas"
         style={{ width: size.width, height: size.height }}
-        onClick={handleClick}
         aria-label="Battlefield"
         data-testid="battlefield"
       />

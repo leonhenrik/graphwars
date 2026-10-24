@@ -604,3 +604,215 @@ body {
     flex-wrap: wrap;
   }
 }
+
+/* ---- Laptop display ---- */
+.display-main {
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.display-main .field-area {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.battlefield-canvas {
+  cursor: default;
+}
+
+.statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  padding: 8px 18px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+.draft {
+  flex: 1;
+  min-width: 220px;
+  font-size: 15px;
+}
+
+.draft code {
+  padding: 1px 6px;
+  background: #0b1220;
+  border-radius: 4px;
+  color: #bae6fd;
+  font-size: 15px;
+}
+
+.draft-dir {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.draft-error {
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.message.inline {
+  min-height: 0;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.pill.offline {
+  border-style: dashed;
+  border-color: #f59e0b;
+}
+
+.pill.big {
+  padding: 5px 12px;
+  font-size: 14px;
+  border-width: 2px;
+}
+
+.joined {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.join-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.qr {
+  border-radius: 8px;
+  background: #fff;
+}
+
+.join-steps {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.join-url {
+  margin: 4px 0;
+  font: 700 22px ui-monospace, Consolas, monospace;
+  color: #bae6fd;
+  word-break: break-all;
+}
+
+.join-alt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0 6px 0 0;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.btn:disabled.start {
+  opacity: 0.5;
+}
+
+/* ---- Phone ---- */
+.phone {
+  min-height: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 10px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  touch-action: manipulation;
+}
+
+.phone-card {
+  margin-top: 20vh;
+  padding: 24px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.phone-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  font-size: 17px;
+}
+
+.offline-tag {
+  margin-left: auto;
+  color: #fbbf24;
+  font-size: 12px;
+}
+
+.phone-status {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 15px;
+  text-align: center;
+}
+
+.phone-status.go {
+  background: #14532d;
+  color: #bbf7d0;
+  font-weight: 700;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.phone-status.out {
+  background: #4c1d1d;
+  color: #fecaca;
+}
+
+@keyframes pulse {
+  50% {
+    filter: brightness(1.25);
+  }
+}
+
+.calculator {
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.phone .key {
+  padding: 14px 0;
+  font-size: 18px;
+}
+
+.phone .key.fn {
+  font-size: 14px;
+}
+
+.phone .fn-input {
+  font-size: 20px;
+}
+
+.btn.fire {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  font-size: 18px;
+}
