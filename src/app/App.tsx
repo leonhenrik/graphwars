@@ -23,21 +23,12 @@ export function App() {
   }
 
   const { game } = g;
-  const currentPlayer = getPlayer(game, game.turn.currentPlayerId);
-  const status =
-    game.status === 'over'
-      ? `${game.winnerId !== null ? getPlayer(game, game.winnerId).name : 'Nobody'} won`
-      : g.isAnimating
-        ? 'Shot in flight'
-        : `${currentPlayer.name} to shoot`;
 
   return (
     <div className="app">
       <header className="header">
         <h1>Graphwars</h1>
-        <span className="status" data-testid="match-status">
-          {status}
-        </span>
+        <TurnIndicator game={game} busy={g.isAnimating} />
         <div className="header-actions">
           <label className="toggle">
             <input type="checkbox" checked={g.passEnabled} onChange={(e) => g.setPassEnabled(e.target.checked)} />
@@ -70,7 +61,7 @@ export function App() {
         </div>
 
         <aside className="side-panel">
-          <TurnIndicator game={game} busy={g.isAnimating} />
+          <GameHUD game={game} />
           <FunctionInput
             value={g.expression}
             onChange={g.setExpression}
@@ -86,7 +77,6 @@ export function App() {
           <div className={`message ${g.message?.kind ?? ''}`} role="status" aria-live="polite" data-testid="message">
             {g.message?.text}
           </div>
-          <GameHUD game={game} />
         </aside>
       </main>
 
