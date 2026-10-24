@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, defaultDirection, restartGame } from '../game/gameState';
 import { applyRound, applyShot, simulateShot } from '../game/simulation';
+import { extendBounds } from '../game/trajectory';
 import { advanceTurn, getActiveSoldierId, markFired, validateShooter } from '../game/turnManager';
 import type { GameState, Obstacle, Soldier } from '../game/types';
 
@@ -191,6 +192,40 @@ describe('turns', () => {
   it('defaults the direction towards the middle of the field', () => {
     expect(defaultDirection(soldier('l', 1, -10, 0))).toBe(1);
     expect(defaultDirection(soldier('r', 2, 10, 0))).toBe(-1);
+  });
+});
+
+describe('extended (greyed-out) paths', () => {
+  const field = { minX: -25, maxX: 25, minY: -15, maxY: 15 };
+
+  it('extendBounds adds the display margin on every side', () => {
+    expect(extendBounds(field)).toEqual({ minX: -32.5, maxX: 32.5, minY: -19.5, maxY: 19.5 });
+  });
+
+  it('a miss continues beyond the border for display only; collisions use the real path', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 8)]);
+    const r = simulateShot(s, 'a', '0', 1);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.shot.outcome).toBe('miss');
+    expect(r.shot.points[r.shot.points.length - 1]!.x).toBeCloseTo(25, 6);
+    expect(r.shot.extendedPoints[r.shot.extendedPoints.length - 1]!.x).toBeCloseTo(32.5, 6);
+    expect(r.shot.extendedPoints.slice(0, r.shot.points.length - 1)).toEqual(r.shot.points.slice(0, -1));
+  });
+
+  it('a curve that leaves the field vertically is shown continuing into the margin', () => {
+    const s = makeState([soldier('a', 1, 0, 0), soldier('b', 2, 20, -12)]);
+    const r = simulateShot(s, 'a', 'x^2/3', 1);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.shot.points[r.shot.points.length - 1]!.y).toBeLessThanOrEqual(15);
+    expect(r.shot.extendedPoints[r.shot.extendedPoints.length - 1]!.y).toBeGreaterThan(15);
+  });
+
+  it('hits are not extended', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)]);
+    const r = simulateShot(s, 'a', '0', 1);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.shot.outcome).toBe('hit-soldier');
+    expect(r.shot.extendedPoints).toEqual(r.shot.points);
   });
 });
 

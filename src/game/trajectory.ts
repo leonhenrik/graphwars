@@ -1,9 +1,19 @@
-import { MAX_JUMP_PER_STEP, SAMPLE_STEP } from './constants';
+import { MAX_JUMP_PER_STEP, SAMPLE_STEP, VIEW_MARGIN_X, VIEW_MARGIN_Y } from './constants';
 import type { Bounds, ShotDirection, Trajectory, TrajectoryEnd, TrajectoryPoint } from './types';
 
 export type TrajectoryResult =
   | { ok: true; trajectory: Trajectory }
   | { ok: false; error: string };
+
+/** The battlefield plus the greyed-out margin that is drawn (and where curves are still shown). */
+export function extendBounds(bounds: Bounds): Bounds {
+  return {
+    minX: bounds.minX - VIEW_MARGIN_X,
+    maxX: bounds.maxX + VIEW_MARGIN_X,
+    minY: bounds.minY - VIEW_MARGIN_Y,
+    maxY: bounds.maxY + VIEW_MARGIN_Y,
+  };
+}
 
 /**
  * Builds the trajectory for a shooter at world position (x0, y0).

@@ -3,6 +3,7 @@ import { DEFAULT_OPTIONS, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS } from '../src
 import { createInitialState, defaultDirection, getPlayerSoldier } from '../src/game/gameState';
 import { describeShot } from '../src/game/messages';
 import { applyRound, applyShot, buildTrajectory, simulateShot } from '../src/game/simulation';
+import { extendBounds } from '../src/game/trajectory';
 import { advanceRound, advanceTurn, markFired } from '../src/game/turnManager';
 import type { GameOptions, GameState, MapId, PlayerId, ShotDirection } from '../src/game/types';
 import type {
@@ -71,6 +72,7 @@ export class Session {
   private deadline: number | null = null;
   private countdown: ReturnType<typeof setTimeout> | null = null;
   private nextShotId = 1;
+  private matchId = 0;
   private readonly shotTimeoutMs: number;
 
   constructor(options: SessionOptions = {}) {
@@ -180,7 +182,7 @@ export class Session {
         this.broadcast();
         return;
       case 'skipTurn':
-        this.endWaiting("The host didn't wait any longer.");
+        this.endWaiting("The host didn't wait any longer.", false);
         return;
       case 'shotDone':
         this.resolveShots(message.id);
@@ -211,24 +213,28 @@ export class Session {
       : this.game.turn.currentPlayerId === member.playerId;
   }
 
-  private fire(member: Member, expression: string, direction: ShotDirection): void {
+  private fire(member: Member, expression: string, direction: ShotDirection, autoFired = false): boolean {
     const game = this.game;
-    if (!game) return;
+    if (!game) return false;
     this.drafts.set(member.playerId, { expression, direction });
-    const soldierId = getPlayerSoldier(game, member.playerId)?.id;
-    const attempt = soldierId ? simulateShot(game, soldierId, expression, direction, !this.simultaneous) : null;
-    if (!attempt || !attempt.ok) {
+    const fired = this.simulateFor(member, expression, direction);
+    if (!fired) {
       this.broadcast();
-      return;
+      return false;
     }
-    const fired: FiredShot = { playerId: member.playerId, shot: attempt.shot, color: this.colorOf(member.playerId) };
     this.drafts.delete(member.playerId);
 
     if (!this.simultaneous) {
       this.game = markFired(game);
-      this.setNotice('info', `Player ${member.playerId} fired y = ${expression}`, false);
+      this.setNotice(
+        autoFired ? 'warning' : 'info',
+        autoFired
+          ? `Time's up! Player ${member.playerId}'s function was fired as typed: y = ${expression}`
+          : `Player ${member.playerId} fired y = ${expression}`,
+        false,
+      );
       this.launch([fired]);
-      return;
+      return true;
     }
 
     this.submissions.set(member.playerId, fired);
@@ -239,6 +245,17 @@ export class Session {
     } else {
       this.setNotice('info', `${this.submissions.size}/${living} players have fired.`);
     }
+    return true;
+  }
+
+  /** Simulates a member's shot against the current state; null if the function cannot be fired. */
+  private simulateFor(member: Member, expression: string, direction: ShotDirection): FiredShot | null {
+    const game = this.game;
+    if (!game) return null;
+    const soldierId = getPlayerSoldier(game, member.playerId)?.id;
+    const attempt = soldierId ? simulateShot(game, soldierId, expression, direction, !this.simultaneous) : null;
+    if (!attempt || !attempt.ok) return null;
+    return { playerId: member.playerId, shot: attempt.shot, color: this.colorOf(member.playerId) };
   }
 
   /** Sends the shots to the big screen and waits (with a safety timeout) for the animation to finish. */
@@ -279,20 +296,43 @@ export class Session {
     this.broadcast();
   }
 
-  /** The turn (or round) ran out of time, or the host stopped waiting: whoever has not fired loses their shot. */
-  private endWaiting(reason: string): void {
+  /**
+   * The turn (or round) ran out of time, or the host stopped waiting.
+   * With `autoFire` (countdown) every player who still has to shoot fires the function as it currently
+   * stands; players without a valid function lose their shot.
+   */
+  private endWaiting(reason: string, autoFire: boolean): void {
     const game = this.game;
     if (this.phase !== 'playing' || !game || this.pending) return;
 
     if (this.simultaneous) {
+      let autoFired = 0;
+      if (autoFire) {
+        for (const member of this.members) {
+          const draft = this.drafts.get(member.playerId);
+          if (!draft || !this.canAct(member)) continue;
+          const fired = this.simulateFor(member, draft.expression, draft.direction);
+          if (!fired) continue;
+          this.submissions.set(member.playerId, fired);
+          this.drafts.delete(member.playerId);
+          autoFired++;
+        }
+      }
       if (this.submissions.size > 0) {
-        this.setNotice('warning', reason, false);
+        this.setNotice(
+          'warning',
+          autoFired > 0 ? `${reason} Unfired functions were fired as typed.` : reason,
+          false,
+        );
         this.launch([...this.submissions.values()]);
         return;
       }
       this.setNotice('warning', `${reason} Nobody fired.`, false);
       this.game = advanceRound(game);
     } else {
+      const member = this.members.find((m) => m.playerId === game.turn.currentPlayerId);
+      const draft = member ? this.drafts.get(member.playerId) : undefined;
+      if (autoFire && member && draft && this.fire(member, draft.expression, draft.direction, true)) return;
       this.setNotice('warning', `Player ${game.turn.currentPlayerId}'s turn was skipped. ${reason}`, false);
       this.game = advanceTurn(game);
     }
@@ -303,6 +343,7 @@ export class Session {
 
   private startMatchWith(config: GameState['config']): void {
     this.cancelPending();
+    this.matchId++;
     this.game = createInitialState(config);
     this.phase = 'playing';
     this.drafts.clear();
@@ -322,7 +363,7 @@ export class Session {
     if (!this.options.countdownEnabled || this.phase !== 'playing') return;
     const ms = this.options.countdownSeconds * 1000;
     this.deadline = Date.now() + ms;
-    this.countdown = setTimeout(() => this.endWaiting("Time's up!"), ms);
+    this.countdown = setTimeout(() => this.endWaiting("Time's up!", true), ms);
   }
 
   private stopCountdown(): void {
@@ -373,11 +414,15 @@ export class Session {
       if (!soldier || !soldier.alive) continue;
       if (this.simultaneous ? this.submissions.has(playerId) : game.turn.currentPlayerId !== playerId) continue;
       const built = buildTrajectory(game, soldier.id, draft.expression, draft.direction);
+      // The preview also shows where the curve goes beyond the battlefield border (greyed out on screen).
+      const extended = built.ok
+        ? buildTrajectory(game, soldier.id, draft.expression, draft.direction, extendBounds(game.battlefield.bounds))
+        : built;
       views.push({
         playerId,
         expression: draft.expression,
         direction: draft.direction,
-        points: built.ok ? built.trajectory.points : null,
+        points: extended.ok ? extended.trajectory.points : null,
         error: built.ok ? null : built.error,
       });
     }
@@ -433,6 +478,7 @@ export class Session {
       turnDirection: mine ? defaultDirection(mine) : 1,
       shotInFlight: this.pending !== null,
       winnerId: game?.winnerId ?? null,
+      matchId: this.matchId,
       draftError: drafts.find((d) => d.playerId === member.playerId)?.error ?? null,
       timer,
       notice: this.notice,

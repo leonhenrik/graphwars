@@ -1,18 +1,22 @@
 import { findFirstCollision, obstacleTarget, soldierTarget, type CircleTarget } from './collision';
 import { parseExpression } from './expressionParser';
 import { getSoldier } from './gameState';
-import { computeTrajectory, isUsableTrajectory } from './trajectory';
+import { computeTrajectory, extendBounds, isUsableTrajectory } from './trajectory';
 import { advanceRound, advanceTurn, validateShooter } from './turnManager';
-import type { GameState, ShotDirection, ShotResult, Trajectory } from './types';
+import type { Bounds, GameState, ShotDirection, ShotResult, Trajectory } from './types';
 
 export type ShotAttempt = { ok: true; shot: ShotResult } | { ok: false; error: string };
 
-/** Builds the unobstructed trajectory for a soldier; used for previews and for firing. */
+/**
+ * Builds the unobstructed trajectory for a soldier; used for previews and for firing.
+ * `bounds` defaults to the battlefield; pass `extendBounds(...)` to also get the greyed-out continuation.
+ */
 export function buildTrajectory(
   state: GameState,
   soldierId: string,
   expression: string,
   direction: ShotDirection,
+  bounds: Bounds = state.battlefield.bounds,
 ): { ok: true; trajectory: Trajectory } | { ok: false; error: string } {
   const soldier = getSoldier(state, soldierId);
   if (!soldier) return { ok: false, error: 'No shooter selected.' };
@@ -20,12 +24,7 @@ export function buildTrajectory(
   const parsed = parseExpression(expression);
   if (!parsed.ok) return parsed;
 
-  const result = computeTrajectory(
-    parsed.evaluate,
-    { x: soldier.x, y: soldier.y },
-    direction,
-    state.battlefield.bounds,
-  );
+  const result = computeTrajectory(parsed.evaluate, { x: soldier.x, y: soldier.y }, direction, bounds);
   if (!result.ok) return result;
 
   if (!isUsableTrajectory(result.trajectory)) {
@@ -63,6 +62,7 @@ export function simulateShot(
 
   const collision = findFirstCollision(trajectory.points, targets);
   if (!collision) {
+    const extended = buildTrajectory(state, soldierId, expression, direction, extendBounds(state.battlefield.bounds));
     return {
       ok: true,
       shot: {
@@ -70,6 +70,7 @@ export function simulateShot(
         expression,
         direction,
         points: trajectory.points,
+        extendedPoints: extended.ok ? extended.trajectory.points : trajectory.points,
         outcome: 'miss',
         targetId: null,
         impact: null,
@@ -86,6 +87,7 @@ export function simulateShot(
       expression,
       direction,
       points,
+      extendedPoints: points,
       outcome: collision.target.kind === 'soldier' ? 'hit-soldier' : 'hit-obstacle',
       targetId: collision.target.id,
       impact: collision.point,

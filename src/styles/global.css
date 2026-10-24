@@ -472,9 +472,22 @@ body {
 }
 
 .btn.direction {
-  display: block;
-  width: 100%;
+  flex: 1;
+}
+
+.tool-row {
+  display: flex;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.tool-row .btn {
+  padding: 11px 12px;
+}
+
+.tool-row .btn.clear {
+  flex: 0 0 76px;
+  color: #fca5a5;
 }
 
 /* ---- Lobby (laptop menu) ---- */
@@ -1005,9 +1018,18 @@ body {
 }
 
 .offline-tag {
-  margin-left: auto;
   color: #fbbf24;
   font-size: 12px;
+}
+
+.phone-round {
+  margin-left: auto;
+  padding: 3px 10px;
+  background: var(--panel-2);
+  border-radius: 999px;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .phone-status {

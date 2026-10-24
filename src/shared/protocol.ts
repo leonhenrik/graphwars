@@ -83,6 +83,8 @@ export interface PlayerView {
   turnDirection: ShotDirection;
   shotInFlight: boolean;
   winnerId: PlayerId | null;
+  /** Changes whenever a new match starts, so the phone can reset per-match settings (e.g. its x direction). */
+  matchId: number;
   draftError: string | null;
   timer: TimerView | null;
   notice: Notice | null;

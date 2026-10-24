@@ -84,13 +84,21 @@ export function PlayerApp() {
   const canAct = view?.canAct === true;
   const turnNumber = view?.turnNumber ?? 0;
   const turnDirection = view?.turnDirection ?? 1;
+  const matchId = view?.matchId ?? null;
 
-  // A new turn (or round) starts facing the middle of the field and buzzes the phone.
+  // The x direction is the player's own setting: it starts facing the middle of the field once per match and
+  // is then kept across rounds (it only changes when the player flips it).
+  const seenMatch = useRef<number | null>(null);
   useEffect(() => {
-    if (!canAct) return;
+    if (matchId === null || seenMatch.current === matchId) return;
+    seenMatch.current = matchId;
     setDirection(turnDirection);
-    if ('vibrate' in navigator) navigator.vibrate(200);
-  }, [canAct, turnNumber, turnDirection]);
+  }, [matchId, turnDirection]);
+
+  // Buzz the phone when it is my turn (or a new round starts).
+  useEffect(() => {
+    if (canAct && 'vibrate' in navigator) navigator.vibrate(200);
+  }, [canAct, turnNumber]);
 
   useEffect(() => {
     write(EXPR_KEY, expression);
@@ -135,6 +143,11 @@ export function PlayerApp() {
         <span className="dot" style={{ background: you.color }} />
         <strong data-testid="phone-name">You are {you.name}</strong>
         {!connected && <span className="offline-tag">reconnecting…</span>}
+        {view.phase !== 'lobby' && (
+          <span className="phone-round" data-testid="phone-round">
+            {view.options.shotMode === 'simultaneous' ? 'Round' : 'Turn'} {view.turnNumber}
+          </span>
+        )}
       </header>
       <div className={`phone-status ${status.tone}`} data-testid="phone-status">
         {status.text}

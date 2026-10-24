@@ -36,9 +36,9 @@ function makeClient(isLocal = true): TestClient {
 let session: Session;
 let display: TestClient;
 
-function fresh() {
+function fresh(shotTimeoutMs = 5000) {
   session?.close();
-  session = new Session({ shotTimeoutMs: 5000 });
+  session = new Session({ shotTimeoutMs });
   display = makeClient();
   session.connect(display);
   session.handle(display, { type: 'hello', role: 'display' });
@@ -418,7 +418,7 @@ describe('countdown option', () => {
     expect(display.display().timer).toBeNull();
   });
 
-  it('turn mode: counts down, skips the turn at zero, and restarts for the next player', () => {
+  it('turn mode: counts down and, at zero, fires the function as it currently stands', () => {
     vi.useFakeTimers();
     fresh();
     const [p1, p2] = startWith(2, { countdownEnabled: true, countdownSeconds: 20 });
@@ -426,16 +426,50 @@ describe('countdown option', () => {
     expect(p1.player().timer).toEqual({ remainingMs: 20_000, totalMs: 20_000 });
 
     vi.advanceTimersByTime(8000);
-    session.handle(p1, { type: 'draft', expression: 'x', direction: 1 });
+    const w = hit(1, 2);
+    session.handle(p1, { type: 'draft', expression: w.expression, direction: w.direction });
     expect(secondsLeft()).toBe(12);
+    expect(display.shotMessages()).toHaveLength(0);
 
     vi.advanceTimersByTime(12_001);
-    const view = display.display();
-    expect(view.game!.turn.currentPlayerId).toBe(2);
-    expect(view.notice?.text).toMatch(/Player 1's turn was skipped.*Time's up/);
-    expect(view.drafts).toEqual([]);
-    expect(secondsLeft()).toBe(20);
-    expect(p2.player().canAct).toBe(true);
+    expect(display.shotMessages()).toHaveLength(1);
+    expect(lastShots().shots[0]).toMatchObject({ playerId: 1 });
+    expect(lastShots().shots[0]!.shot).toMatchObject({ expression: w.expression, direction: w.direction, targetId: 'p2' });
+    expect(display.display().notice?.text).toMatch(/Time's up!.*fired as typed/);
+    expect(display.display().timer).toBeNull();
+
+    finishShots();
+    expect(display.display().phase).toBe('over');
+    expect(p2.player().you.alive).toBe(false);
+  });
+
+  it('turn mode: the auto-fired shot uses the flipped direction, and a player without a valid function loses the turn', () => {
+    vi.useFakeTimers();
+    fresh();
+    const [p1, p2] = startWith(2, { countdownEnabled: true, countdownSeconds: 10 });
+    session.handle(p1, { type: 'draft', expression: '0', direction: -1 });
+    vi.advanceTimersByTime(10_001);
+    expect(lastShots().shots[0]!.shot.direction).toBe(-1);
+    finishShots();
+    expect(display.display().game!.turn.currentPlayerId).toBe(2);
+
+    // Player 2 typed something unfireable: the turn is skipped, the timer restarts.
+    session.handle(p2, { type: 'draft', expression: 'sin(', direction: -1 });
+    vi.advanceTimersByTime(10_001);
+    expect(display.shotMessages()).toHaveLength(1);
+    expect(display.display().game!.turn.currentPlayerId).toBe(1);
+    expect(display.display().notice?.text).toMatch(/Player 2's turn was skipped.*Time's up/);
+    expect(display.display().drafts).toEqual([]);
+    expect(secondsLeft()).toBe(10);
+  });
+
+  it('turn mode: with no draft at all the turn is simply skipped', () => {
+    vi.useFakeTimers();
+    fresh();
+    startWith(2, { countdownEnabled: true, countdownSeconds: 6 });
+    vi.advanceTimersByTime(6001);
+    expect(display.shotMessages()).toHaveLength(0);
+    expect(display.display().game!.turn.currentPlayerId).toBe(2);
   });
 
   it('is paused while a shot is animated and restarts afterwards', () => {
@@ -466,23 +500,62 @@ describe('countdown option', () => {
     expect(display.display().phase).toBe('over');
   });
 
-  it('simultaneous: at zero only the shots already fired are resolved', () => {
+  it('simultaneous: when everybody has fired the countdown is skipped and the shots resolve at once', () => {
     vi.useFakeTimers();
-    fresh();
-    const [p1, p2] = startWith(3, { shotMode: 'simultaneous', countdownEnabled: true, countdownSeconds: 15 });
+    fresh(10 * 60_000); // long animation safety timeout: only the countdown could fire here
+    const [p1, p2, p3] = startWith(3, { shotMode: 'simultaneous', countdownEnabled: true, countdownSeconds: 60 });
+    vi.advanceTimersByTime(5000);
     session.handle(p1, { type: 'fire', expression: '0', direction: 1 });
     session.handle(p2, { type: 'fire', expression: '0', direction: -1 });
     expect(display.shotMessages()).toHaveLength(0);
+    expect(display.display().timer).not.toBeNull();
+
+    session.handle(p3, { type: 'fire', expression: '0', direction: -1 });
+    expect(display.shotMessages()).toHaveLength(1); // launched immediately, 55 s early
+    expect(display.display().timer).toBeNull();
+    expect(p1.player().timer).toBeNull();
+
+    // the old countdown must not fire a second time
+    vi.advanceTimersByTime(120_000);
+    expect(display.shotMessages()).toHaveLength(1);
+    finishShots();
+    expect(display.display().game!.turn.turnNumber).toBe(2);
+    expect(secondsLeft()).toBe(60);
+  });
+
+  it('turn mode: firing early cancels the running countdown as well', () => {
+    vi.useFakeTimers();
+    fresh(10 * 60_000);
+    const [p1] = startWith(2, { countdownEnabled: true, countdownSeconds: 30 });
+    vi.advanceTimersByTime(3000);
+    session.handle(p1, { type: 'fire', expression: '0', direction: 1 });
+    expect(display.display().timer).toBeNull();
+    vi.advanceTimersByTime(60_000);
+    expect(display.shotMessages()).toHaveLength(1);
+  });
+
+  it('simultaneous: at zero every unfired valid function is fired as typed, locked-in shots stay', () => {
+    vi.useFakeTimers();
+    fresh();
+    const [p1, p2, p3] = startWith(3, { shotMode: 'simultaneous', countdownEnabled: true, countdownSeconds: 15 });
+    session.handle(p1, { type: 'fire', expression: '0', direction: 1 });
+    session.handle(p2, { type: 'draft', expression: 'x/10', direction: -1 });
+    session.handle(p3, { type: 'draft', expression: 'sin(', direction: -1 }); // not fireable
+    expect(display.shotMessages()).toHaveLength(0);
 
     vi.advanceTimersByTime(15_001);
-    expect(lastShots().shots.map((s) => s.playerId)).toEqual([1, 2]);
+    expect(lastShots().shots.map((s) => [s.playerId, s.shot.expression])).toEqual([
+      [1, '0'],
+      [2, 'x/10'],
+    ]);
+    expect(display.display().notice?.text).toMatch(/Time's up!.*fired as typed/);
     expect(display.display().timer).toBeNull();
     finishShots();
     expect(display.display().game!.turn.turnNumber).toBe(2);
     expect(secondsLeft()).toBe(15);
   });
 
-  it('simultaneous: if nobody fired, the round just advances', () => {
+  it('simultaneous: if nobody has anything to fire, the round just advances', () => {
     vi.useFakeTimers();
     fresh();
     startWith(2, { shotMode: 'simultaneous', countdownEnabled: true, countdownSeconds: 5 });
@@ -491,6 +564,17 @@ describe('countdown option', () => {
     expect(display.display().game!.turn.turnNumber).toBe(2);
     expect(display.display().notice?.text).toMatch(/Nobody fired/);
     expect(secondsLeft()).toBe(5);
+  });
+
+  it('the host skipping an offline player does not fire their draft', () => {
+    const [p1, p2] = startWith(2);
+    session.handle(p1, { type: 'fire', expression: '0', direction: 1 });
+    finishShots();
+    session.handle(p2, { type: 'draft', expression: '0', direction: -1 });
+    session.disconnect(p2);
+    session.handle(display, { type: 'skipTurn' });
+    expect(display.shotMessages()).toHaveLength(1);
+    expect(display.display().game!.turn.currentPlayerId).toBe(1);
   });
 
   it('going back to the lobby cancels the countdown', () => {
@@ -530,6 +614,50 @@ describe('connection loss', () => {
     session.handle(display, { type: 'skipTurn' });
     expect(display.display().game!.turn.currentPlayerId).toBe(1);
     expect(display.display().notice?.kind).toBe('warning');
+  });
+});
+
+describe('phone support', () => {
+  it('gives every new match a new id, so phones can reset per-match settings', () => {
+    const [p1] = startWith(2);
+    const first = p1.player().matchId;
+    expect(first).toBeGreaterThan(0);
+    session.handle(display, { type: 'restart' });
+    expect(p1.player().matchId).toBe(first + 1);
+    session.handle(display, { type: 'lobby' });
+    expect(p1.player().matchId).toBe(first + 1);
+  });
+
+  it('turn mode: the flipped direction is kept in the draft from round to round', () => {
+    const [p1, p2] = startWith(2);
+    session.handle(p1, { type: 'draft', expression: '0', direction: -1 });
+    expect(display.display().drafts[0]!.direction).toBe(-1);
+    session.handle(p1, { type: 'fire', expression: '0', direction: -1 });
+    finishShots();
+    session.handle(p2, { type: 'fire', expression: '0', direction: -1 });
+    finishShots();
+    // phones re-send their own direction with the next draft; the server just uses what it receives
+    session.handle(p1, { type: 'draft', expression: '0', direction: -1 });
+    expect(display.display().drafts[0]).toMatchObject({ playerId: 1, direction: -1 });
+  });
+
+  it('previews continue beyond the battlefield border so players see where the curve goes', () => {
+    const [p1] = startWith(2, { preview: true });
+    session.handle(p1, { type: 'draft', expression: '0', direction: 1 });
+    const points = display.display().drafts[0]!.points!;
+    const game = display.display().game!;
+    expect(points[points.length - 1]!.x).toBeGreaterThan(game.battlefield.bounds.maxX + 5);
+    expect(points[points.length - 1]!.x).toBeLessThanOrEqual(game.battlefield.bounds.maxX + 7.5 + 1e-9);
+    expect(p1.player().draftError).toBeNull();
+  });
+
+  it('fired misses carry the extended path for the display', () => {
+    const [p1] = startWith(2);
+    session.handle(p1, { type: 'fire', expression: '0', direction: -1 }); // towards the left wall: a miss
+    const { shot } = lastShots().shots[0]!;
+    expect(shot.outcome).toBe('miss');
+    expect(shot.extendedPoints.length).toBeGreaterThan(shot.points.length);
+    expect(shot.extendedPoints[shot.extendedPoints.length - 1]!.x).toBeLessThan(-25 - 5);
   });
 });
 

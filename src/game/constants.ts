@@ -2,6 +2,13 @@ import type { Bounds, GameOptions } from './types';
 
 export const BOUNDS: Bounds = { minX: -25, maxX: 25, minY: -15, maxY: 15 };
 
+/**
+ * The drawn area extends this far beyond the battlefield on each side (same 5:3 aspect as the field).
+ * Curves keep going there, greyed out, but nothing in that margin takes part in the game.
+ */
+export const VIEW_MARGIN_X = 7.5;
+export const VIEW_MARGIN_Y = 4.5;
+
 /** Distance between curve samples along the local x-axis. */
 export const SAMPLE_STEP = 0.05;
 

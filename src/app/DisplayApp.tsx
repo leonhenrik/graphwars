@@ -24,6 +24,7 @@ export function DisplayApp() {
   const [rejected, setRejected] = useState<string | null>(null);
   const [animation, setAnimation] = useState<ShotAnimation | null>(null);
   const [effects, setEffects] = useState<Effect[]>([]);
+  const [traces, setTraces] = useState<PathLine[]>([]);
   const [confirm, setConfirm] = useState<'restart' | 'lobby' | null>(null);
   const [info, setInfo] = useState<ServerInfo | null>(null);
   const viewRef = useRef<DisplayView | null>(null);
@@ -39,6 +40,8 @@ export function DisplayApp() {
         animationRef.current = null;
         setAnimation(null);
       }
+      // A fresh match (or the lobby) starts without traces of earlier shots.
+      if (message.view.phase === 'lobby' || message.view.game?.turn.turnNumber === 1) setTraces([]);
     } else if (message.type === 'shots') {
       const next = { id: message.id, shots: message.shots };
       animationRef.current = next;
@@ -77,6 +80,7 @@ export function DisplayApp() {
         }
       }
       setEffects((prev) => [...prev.filter((e) => now - e.startedAt < 1000), ...added]);
+      setTraces(anim.shots.map(({ shot, color }) => ({ points: shot.extendedPoints, color })));
       setAnimation(null);
       send({ type: 'shotDone', id });
     },
@@ -172,6 +176,7 @@ export function DisplayApp() {
             lockedIds={lockedIds}
             direction={direction}
             previews={view.options.preview ? previews : []}
+            traces={traces}
             animation={animation}
             effects={effects}
             onAnimationComplete={completeShots}

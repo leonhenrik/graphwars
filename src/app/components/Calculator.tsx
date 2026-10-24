@@ -126,9 +126,12 @@ export function Calculator({
               {key.label}
             </button>
           ))}
+        </div>
+
+        <div className="tool-row">
           <button
             type="button"
-            className="key action wide"
+            className="btn clear"
             disabled={disabled}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
@@ -139,17 +142,16 @@ export function Calculator({
           >
             Clear
           </button>
+          <button
+            type="button"
+            className="btn direction"
+            onClick={onToggleDirection}
+            disabled={disabled}
+            data-testid="direction-toggle"
+          >
+            x direction: {direction === 1 ? 'right →' : '← left'}
+          </button>
         </div>
-
-        <button
-          type="button"
-          className="btn direction"
-          onClick={onToggleDirection}
-          disabled={disabled}
-          data-testid="direction-toggle"
-        >
-          x direction: {direction === 1 ? 'right →' : '← left'} (flip)
-        </button>
 
         <button type="submit" className="btn primary fire" disabled={!canFire} data-testid="fire-button">
           {fireLabel}

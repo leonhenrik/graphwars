@@ -1,4 +1,5 @@
-import type { GameState, ShotDirection, TrajectoryPoint } from '../../game/types';
+import { extendBounds } from '../../game/trajectory';
+import type { Bounds, GameState, ShotDirection, TrajectoryPoint } from '../../game/types';
 
 export interface Effect {
   id: number;
@@ -22,9 +23,11 @@ export interface Scene {
   originId: string | null;
   /** Soldiers that currently have to act (pulsing ring). */
   activeIds: string[];
-  /** Soldiers that already fired this round (simultaneous mode); shown with a check mark. */
+  /** Soldiers that already fired this round (simultaneous mode); shown with a green ring. */
   lockedIds: string[];
   direction: ShotDirection;
+  /** Faint dashed traces of the previous shot(s). */
+  traces: PathLine[];
   previews: PathLine[];
   /** Shots being animated, already trimmed to the portion revealed so far. */
   shots: PathLine[];
@@ -35,6 +38,11 @@ export interface Scene {
 export interface View {
   width: number;
   height: number;
+}
+
+/** The area that is drawn: the battlefield plus a greyed-out margin where curves can still be seen. */
+export function viewBoundsOf(field: Bounds): Bounds {
+  return extendBounds(field);
 }
 
 /** Returns the first `fraction` (0..1) of the polyline by arc length. */
@@ -78,15 +86,32 @@ export function pathLength(points: TrajectoryPoint[]): number {
   return total;
 }
 
-export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scene): void {
-  const { bounds } = scene.state.battlefield;
-  const scale = view.width / (bounds.maxX - bounds.minX);
-  const px = (x: number) => (x - bounds.minX) * scale;
-  const py = (y: number) => (bounds.maxY - y) * scale;
+interface StrokeStyle {
+  color: string;
+  alpha: number;
+  width: number;
+  dash?: number[];
+  glow?: number;
+}
 
-  const active = scene.state.soldiers.find((s) => s.id === scene.originId);
-  const ox = active ? active.x : 0;
-  const oy = active ? active.y : 0;
+const OUTSIDE_COLOR = '#94a3b8';
+
+export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scene): void {
+  const field = scene.state.battlefield.bounds;
+  const vb = viewBoundsOf(field);
+  const scale = view.width / (vb.maxX - vb.minX);
+  const px = (x: number) => (x - vb.minX) * scale;
+  const py = (y: number) => (vb.maxY - y) * scale;
+
+  // The battlefield rectangle in canvas pixels; everything outside it is the greyed-out margin.
+  const fx = px(field.minX);
+  const fy = py(field.maxY);
+  const fw = (field.maxX - field.minX) * scale;
+  const fh = (field.maxY - field.minY) * scale;
+
+  const origin = scene.state.soldiers.find((s) => s.id === scene.originId);
+  const ox = origin ? origin.x : 0;
+  const oy = origin ? origin.y : 0;
   const dir = scene.direction;
   // Local coordinate u (function x) = dir * (X - ox); local v (function y) = Y - oy.
   const worldX = (u: number) => ox + dir * u;
@@ -94,17 +119,19 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   ctx.save();
   ctx.clearRect(0, 0, view.width, view.height);
 
-  const bg = ctx.createLinearGradient(0, 0, 0, view.height);
-  bg.addColorStop(0, '#0f172a');
-  bg.addColorStop(1, '#111c33');
-  ctx.fillStyle = bg;
+  ctx.fillStyle = '#0a1020';
   ctx.fillRect(0, 0, view.width, view.height);
+  const bg = ctx.createLinearGradient(0, fy, 0, fy + fh);
+  bg.addColorStop(0, '#0f172a');
+  bg.addColorStop(1, '#13203a');
+  ctx.fillStyle = bg;
+  ctx.fillRect(fx, fy, fw, fh);
 
   // Grid, aligned to integer steps of the local coordinate system.
-  const maxU = Math.ceil(bounds.maxX - bounds.minX);
+  const maxU = Math.ceil(vb.maxX - vb.minX);
   for (let u = -maxU; u <= maxU; u++) {
     const x = worldX(u);
-    if (x < bounds.minX || x > bounds.maxX) continue;
+    if (x < vb.minX || x > vb.maxX) continue;
     ctx.strokeStyle = u % 5 === 0 ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.07)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -112,7 +139,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     ctx.lineTo(px(x), view.height);
     ctx.stroke();
   }
-  for (let v = Math.ceil(bounds.minY - oy); v <= bounds.maxY - oy; v++) {
+  for (let v = Math.ceil(vb.minY - oy); v <= vb.maxY - oy; v++) {
     const y = oy + v;
     ctx.strokeStyle = v % 5 === 0 ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.07)';
     ctx.lineWidth = 1;
@@ -122,8 +149,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     ctx.stroke();
   }
 
-  // Axes through the active player
-  const axisColor = active ? scene.state.players.find((p) => p.id === active.playerId)?.color ?? '#e2e8f0' : '#e2e8f0';
+  // Axes through the origin player
+  const axisColor = origin ? scene.state.players.find((p) => p.id === origin.playerId)?.color ?? '#e2e8f0' : '#e2e8f0';
   ctx.strokeStyle = axisColor;
   ctx.globalAlpha = 0.75;
   ctx.lineWidth = 1.5;
@@ -145,7 +172,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   ctx.textBaseline = 'top';
   for (let u = -Math.floor(maxU / 5) * 5; u <= maxU; u += 5) {
     const x = worldX(u);
-    if (u === 0 || x < bounds.minX + 0.5 || x > bounds.maxX - 0.5) continue;
+    if (u === 0 || x < vb.minX + 0.5 || x > vb.maxX - 0.5) continue;
     ctx.beginPath();
     ctx.moveTo(px(x), py(oy) - 4);
     ctx.lineTo(px(x), py(oy) + 4);
@@ -154,9 +181,9 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   }
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  for (let v = Math.ceil((bounds.minY - oy) / 5) * 5; v <= bounds.maxY - oy; v += 5) {
+  for (let v = Math.ceil((vb.minY - oy) / 5) * 5; v <= vb.maxY - oy; v += 5) {
     const y = oy + v;
-    if (v === 0 || y < bounds.minY + 0.5 || y > bounds.maxY - 0.5) continue;
+    if (v === 0 || y < vb.minY + 0.5 || y > vb.maxY - 0.5) continue;
     ctx.beginPath();
     ctx.moveTo(px(ox) - 4, py(y));
     ctx.lineTo(px(ox) + 4, py(y));
@@ -179,31 +206,73 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     ctx.stroke();
   }
 
+  // Grey veil over everything outside the battlefield, with a dashed border marking the edge.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, view.width, view.height);
+  ctx.rect(fx, fy, fw, fh);
+  ctx.fillStyle = 'rgba(8, 12, 22, 0.66)';
+  ctx.fill('evenodd');
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = 'rgba(148,163,184,0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([8, 6]);
+  ctx.strokeRect(fx, fy, fw, fh);
+  ctx.restore();
+
+  const drawSplit = (points: TrajectoryPoint[], inside: StrokeStyle, outside: StrokeStyle) => {
+    if (points.length < 2) return;
+    const pass = (style: StrokeStyle, clipOutside: boolean) => {
+      ctx.save();
+      ctx.beginPath();
+      if (clipOutside) ctx.rect(0, 0, view.width, view.height);
+      ctx.rect(fx, fy, fw, fh);
+      ctx.clip(clipOutside ? 'evenodd' : 'nonzero');
+      ctx.strokeStyle = style.color;
+      ctx.globalAlpha = style.alpha;
+      ctx.lineWidth = style.width;
+      ctx.lineJoin = 'round';
+      ctx.setLineDash(style.dash ?? []);
+      ctx.shadowColor = style.color;
+      ctx.shadowBlur = style.glow ?? 0;
+      strokePath(ctx, points, px, py);
+      ctx.restore();
+    };
+    pass(inside, false);
+    pass(outside, true);
+  };
+
+  // Faint dashed trace of the previous shot(s)
+  for (const trace of scene.traces) {
+    drawSplit(
+      trace.points,
+      { color: trace.color, alpha: 0.38, width: 2, dash: [3, 7] },
+      { color: OUTSIDE_COLOR, alpha: 0.22, width: 2, dash: [3, 7] },
+    );
+  }
+
   // Preview trajectories
   for (const preview of scene.previews) {
-    if (preview.points.length < 2) continue;
-    ctx.save();
-    ctx.strokeStyle = preview.color;
-    ctx.globalAlpha = 0.7;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
-    strokePath(ctx, preview.points, px, py);
-    ctx.restore();
+    drawSplit(
+      preview.points,
+      { color: preview.color, alpha: 0.75, width: 2, dash: [6, 6] },
+      { color: OUTSIDE_COLOR, alpha: 0.65, width: 2, dash: [6, 6] },
+    );
   }
 
   // Animated shots
   for (const shot of scene.shots) {
     if (shot.points.length === 0) continue;
-    const pts = shot.points;
+    drawSplit(
+      shot.points,
+      { color: shot.color, alpha: 1, width: 3.5, glow: 12 },
+      { color: OUTSIDE_COLOR, alpha: 0.75, width: 3 },
+    );
+    const head = shot.points[shot.points.length - 1] as TrajectoryPoint;
+    const inField = head.x >= field.minX && head.x <= field.maxX && head.y >= field.minY && head.y <= field.maxY;
     ctx.save();
-    ctx.shadowColor = shot.color;
-    ctx.shadowBlur = 12;
-    ctx.strokeStyle = shot.color;
-    ctx.lineWidth = 3.5;
-    ctx.lineJoin = 'round';
-    strokePath(ctx, pts, px, py);
-    const head = pts[pts.length - 1] as TrajectoryPoint;
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = inField ? '#fff' : OUTSIDE_COLOR;
     ctx.beginPath();
     ctx.arc(px(head.x), py(head.y), 5, 0, Math.PI * 2);
     ctx.fill();

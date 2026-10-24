@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { GameState, ShotDirection } from '../../game/types';
 import type { FiredShot } from '../../shared/protocol';
-import { drawScene, partialPath, pathLength, EFFECT_DURATION_MS, type Effect, type PathLine } from './render';
+import { drawScene, partialPath, pathLength, viewBoundsOf, EFFECT_DURATION_MS, type Effect, type PathLine } from './render';
 
 /** One or more shots that are animated together (several when players fire simultaneously). */
 export interface ShotAnimation {
@@ -16,12 +16,17 @@ interface Props {
   lockedIds: string[];
   direction: ShotDirection;
   previews: PathLine[];
+  /** Faint dashed traces of the previous shot(s), shown until the next shot is fired. */
+  traces: PathLine[];
   animation: ShotAnimation | null;
   effects: Effect[];
   onAnimationComplete: (animationId: number) => void;
 }
 
-const UNITS_PER_SECOND = 32;
+/** Shot speed in battlefield units per second, and the min/max time a shot takes (slow enough to follow). */
+const UNITS_PER_SECOND = 18;
+const MIN_SHOT_MS = 1500;
+const MAX_SHOT_MS = 5000;
 
 export function Battlefield({
   state,
@@ -30,6 +35,7 @@ export function Battlefield({
   lockedIds,
   direction,
   previews,
+  traces,
   animation,
   effects,
   onAnimationComplete,
@@ -38,8 +44,8 @@ export function Battlefield({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
-  const { bounds } = state.battlefield;
-  const aspect = (bounds.maxX - bounds.minX) / (bounds.maxY - bounds.minY);
+  const view = viewBoundsOf(state.battlefield.bounds);
+  const aspect = (view.maxX - view.minX) / (view.maxY - view.minY);
 
   useLayoutEffect(() => {
     const wrap = wrapRef.current;
@@ -61,8 +67,8 @@ export function Battlefield({
   }, [aspect]);
 
   // The render loop reads the latest props via a ref so it never needs restarting.
-  const latest = useRef({ state, originId, activeIds, lockedIds, direction, previews, effects, onAnimationComplete });
-  latest.current = { state, originId, activeIds, lockedIds, direction, previews, effects, onAnimationComplete };
+  const latest = useRef({ state, originId, activeIds, lockedIds, direction, previews, traces, effects, onAnimationComplete });
+  latest.current = { state, originId, activeIds, lockedIds, direction, previews, traces, effects, onAnimationComplete };
 
   const animRef = useRef<{
     id: number;
@@ -80,7 +86,10 @@ export function Battlefield({
       start: performance.now(),
       shots: animation.shots.map((shot) => ({
         shot,
-        durationMs: Math.min(2600, Math.max(800, (pathLength(shot.shot.points) / UNITS_PER_SECOND) * 1000)),
+        durationMs: Math.min(
+          MAX_SHOT_MS,
+          Math.max(MIN_SHOT_MS, (pathLength(shot.shot.extendedPoints) / UNITS_PER_SECOND) * 1000),
+        ),
       })),
       done: false,
     };
@@ -109,7 +118,7 @@ export function Battlefield({
         shotLines = anim.shots.map(({ shot, durationMs }) => {
           const fraction = Math.min(1, (now - anim.start) / durationMs);
           if (fraction < 1) allDone = false;
-          return { points: partialPath(shot.shot.points, fraction), color: shot.color };
+          return { points: partialPath(shot.shot.extendedPoints, fraction), color: shot.color };
         });
         if (allDone) {
           anim.done = true;
@@ -125,6 +134,7 @@ export function Battlefield({
         lockedIds: cur.lockedIds,
         direction: cur.direction,
         previews: anim ? [] : cur.previews,
+        traces: anim ? [] : cur.traces,
         shots: shotLines,
         effects: liveEffects,
         now,

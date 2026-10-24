@@ -40,6 +40,7 @@ function MapThumbnail({ config }: { config: MatchConfig }) {
       activeIds: [],
       lockedIds: [],
       direction: 1,
+      traces: [],
       previews: [],
       shots: [],
       effects: [],
