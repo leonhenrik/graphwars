@@ -1,11 +1,19 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Effect } from '../app/components/render';
 import type { ShotAnimation } from '../app/components/Battlefield';
-import { createInitialState, getLivingSoldiers, getSoldier, restartGame } from '../game/gameState';
+import {
+  createInitialState,
+  DEFAULT_CONFIG,
+  defaultDirection,
+  getPlayer,
+  getPlayerSoldier,
+  getSoldier,
+  restartGame,
+} from '../game/gameState';
 import { applyShot, buildTrajectory, simulateShot } from '../game/simulation';
 import { describeTrajectoryEnd } from '../game/trajectory';
-import { canSelectSoldier, markFired } from '../game/turnManager';
-import type { GameState, PlayerId, ShotResult, TrajectoryPoint } from '../game/types';
+import { getActiveSoldierId, markFired } from '../game/turnManager';
+import type { GameState, MatchConfig, PlayerId, ShotDirection, ShotResult, TrajectoryPoint } from '../game/types';
 
 export type MessageKind = 'info' | 'success' | 'warning' | 'error';
 export interface Message {
@@ -15,87 +23,96 @@ export interface Message {
 
 export const DEFAULT_EXPRESSION = 'sin(x)';
 
-function firstLivingId(state: GameState): string | null {
-  return getLivingSoldiers(state, state.turn.currentPlayerId)[0]?.id ?? null;
-}
-
 function describeShot(state: GameState, shot: ShotResult): Message {
   const shooter = getSoldier(state, shot.shooterId);
-  const shooterPlayer = shooter ? state.players[shooter.playerId].name : 'Player';
+  const shooterName = shooter ? getPlayer(state, shooter.playerId).name : 'Player';
   if (shot.outcome === 'hit-soldier') {
     const target = getSoldier(state, shot.targetId);
-    if (target && shooter && target.playerId === shooter.playerId) {
-      return {
-        kind: 'warning',
-        text: `Friendly fire! ${shooterPlayer} eliminated their own soldier ${target.label}.`,
-      };
-    }
-    const label = target ? ` ${target.label}` : '';
-    return { kind: 'success', text: `${shooterPlayer} eliminated enemy soldier${label}!` };
+    const targetName = target ? getPlayer(state, target.playerId).name : 'a player';
+    return { kind: 'success', text: `${shooterName} eliminated ${targetName}!` };
   }
-  if (shot.outcome === 'hit-obstacle') return { kind: 'info', text: 'The shot was blocked by an obstacle.' };
-  return { kind: 'info', text: `Miss — the shot ${describeTrajectoryEnd(shot.end)}.` };
+  if (shot.outcome === 'hit-obstacle') return { kind: 'info', text: `${shooterName}'s shot was blocked by an obstacle.` };
+  return { kind: 'info', text: `${shooterName} missed — the shot ${describeTrajectoryEnd(shot.end)}.` };
 }
 
 export function useGame() {
-  const [game, setGame] = useState<GameState>(createInitialState);
-  const [selectedId, setSelectedId] = useState<string | null>(() => firstLivingId(createInitialState()));
+  const [screen, setScreen] = useState<'menu' | 'game'>('menu');
+  const [game, setGame] = useState<GameState>(() => createInitialState(DEFAULT_CONFIG));
   const [expression, setExpression] = useState(DEFAULT_EXPRESSION);
+  const [direction, setDirection] = useState<ShotDirection>(1);
   const [animation, setAnimation] = useState<ShotAnimation | null>(null);
   const [effects, setEffects] = useState<Effect[]>([]);
   const [message, setMessage] = useState<Message | null>(null);
   const [passEnabled, setPassEnabled] = useState(true);
   const [passScreenFor, setPassScreenFor] = useState<PlayerId | null>(null);
-  const [confirmingRestart, setConfirmingRestart] = useState(false);
+  const [confirm, setConfirm] = useState<'restart' | 'menu' | null>(null);
   const nextAnimationId = useRef(1);
   const nextEffectId = useRef(1);
 
-  const selected = getSoldier(game, selectedId);
+  const activeId = game.status === 'over' ? null : getActiveSoldierId(game);
+  const active = getSoldier(game, activeId);
   const isAnimating = animation !== null;
   const turnLocked = isAnimating || passScreenFor !== null || game.status === 'over';
 
   const trajectory = useMemo(() => {
-    if (!selectedId || game.status === 'over' || game.turn.hasFired) return null;
-    return buildTrajectory(game, selectedId, expression);
-  }, [game, selectedId, expression]);
+    if (!activeId || game.status === 'over' || game.turn.hasFired) return null;
+    return buildTrajectory(game, activeId, expression, direction);
+  }, [game, activeId, expression, direction]);
 
   const previewPoints: TrajectoryPoint[] | null = trajectory?.ok ? trajectory.trajectory.points : null;
   const expressionError = trajectory && !trajectory.ok ? trajectory.error : null;
-  const canFire = !turnLocked && !game.turn.hasFired && selected !== undefined && trajectory?.ok === true;
+  const canFire = !turnLocked && !game.turn.hasFired && active !== undefined && trajectory?.ok === true;
 
-  const selectSoldier = useCallback(
+  const beginMatch = useCallback((state: GameState) => {
+    const first = getPlayerSoldier(state, state.turn.currentPlayerId);
+    setGame(state);
+    setDirection(first ? defaultDirection(first) : 1);
+    setExpression(DEFAULT_EXPRESSION);
+    setAnimation(null);
+    setEffects([]);
+    setMessage(null);
+    setPassScreenFor(null);
+    setConfirm(null);
+    setScreen('game');
+  }, []);
+
+  const startMatch = useCallback((config: MatchConfig) => beginMatch(createInitialState(config)), [beginMatch]);
+
+  const clickSoldier = useCallback(
     (id: string) => {
-      if (isAnimating) return setMessage({ kind: 'warning', text: 'Wait for the shot to finish.' });
-      if (passScreenFor !== null || game.status === 'over') return;
       const soldier = getSoldier(game, id);
-      if (!soldier) return;
-      if (!soldier.alive) return setMessage({ kind: 'error', text: `Soldier ${soldier.label} has been eliminated.` });
-      if (!canSelectSoldier(game, soldier)) {
+      if (!soldier || isAnimating || passScreenFor !== null || game.status === 'over') return;
+      if (!soldier.alive) return setMessage({ kind: 'error', text: `${getPlayer(game, soldier.playerId).name} has been eliminated.` });
+      if (soldier.id !== activeId) {
         return setMessage({
           kind: 'error',
-          text: `That's ${game.players[soldier.playerId].name}'s soldier. Pick one of yours.`,
+          text: `That's ${getPlayer(game, soldier.playerId).name}. It's ${getPlayer(game, game.turn.currentPlayerId).name}'s turn.`,
         });
       }
-      setSelectedId(id);
-      setMessage(null);
+      setMessage({ kind: 'info', text: 'You are the origin (0, 0) of the graph. Enter a function and fire!' });
     },
-    [game, isAnimating, passScreenFor],
+    [game, isAnimating, passScreenFor, activeId],
   );
 
+  const toggleDirection = useCallback(() => {
+    if (turnLocked) return;
+    setDirection((d) => (d === 1 ? -1 : 1));
+  }, [turnLocked]);
+
   const preview = useCallback(() => {
-    if (!selected) return setMessage({ kind: 'error', text: 'Select one of your soldiers first.' });
+    if (!active) return setMessage({ kind: 'error', text: 'No active shooter.' });
     if (!trajectory) return;
     if (!trajectory.ok) return setMessage({ kind: 'error', text: trajectory.error });
     setMessage({
       kind: 'info',
-      text: `Preview: the curve passes through soldier ${selected.label} and ${describeTrajectoryEnd(trajectory.trajectory.end)}. Obstacles and soldiers are not considered until you fire.`,
+      text: `Preview: the curve starts at you and ${describeTrajectoryEnd(trajectory.trajectory.end)}. Obstacles and players are only considered when you fire.`,
     });
-  }, [selected, trajectory]);
+  }, [active, trajectory]);
 
   const fire = useCallback(() => {
     if (isAnimating) return setMessage({ kind: 'warning', text: 'A shot is already in flight.' });
     if (passScreenFor !== null) return setMessage({ kind: 'warning', text: 'Press Continue first.' });
-    const result = simulateShot(game, selectedId ?? '', expression);
+    const result = simulateShot(game, activeId ?? '', expression, direction);
     if (!result.ok) return setMessage({ kind: 'error', text: result.error });
 
     const shooter = getSoldier(game, result.shot.shooterId);
@@ -104,9 +121,9 @@ export function useGame() {
     setAnimation({
       id: nextAnimationId.current++,
       shot: result.shot,
-      color: shooter ? game.players[shooter.playerId].color : '#fff',
+      color: shooter ? getPlayer(game, shooter.playerId).color : '#fff',
     });
-  }, [game, selectedId, expression, isAnimating, passScreenFor]);
+  }, [game, activeId, expression, direction, isAnimating, passScreenFor]);
 
   const completeShot = useCallback(
     (animationId: number) => {
@@ -124,7 +141,7 @@ export function useGame() {
             kind: 'elimination',
             x: target.x,
             y: target.y,
-            color: game.players[target.playerId].color,
+            color: getPlayer(game, target.playerId).color,
             startedAt: now,
           });
         }
@@ -142,7 +159,7 @@ export function useGame() {
 
       const base = describeShot(game, shot);
       if (next.status === 'over') {
-        const winner = next.winnerId ? next.players[next.winnerId].name : 'Nobody';
+        const winner = next.winnerId !== null ? getPlayer(next, next.winnerId).name : 'Nobody';
         setMessage({ kind: 'success', text: `${base.text} ${winner} wins!` });
       } else {
         setMessage(base);
@@ -150,7 +167,8 @@ export function useGame() {
 
       setGame(next);
       setAnimation(null);
-      setSelectedId(next.status === 'over' ? null : firstLivingId(next));
+      const nextSoldier = getPlayerSoldier(next, next.turn.currentPlayerId);
+      if (next.status === 'playing' && nextSoldier) setDirection(defaultDirection(nextSoldier));
       setPassScreenFor(next.status === 'playing' && passEnabled ? next.turn.currentPlayerId : null);
     },
     [animation, game, passEnabled],
@@ -158,29 +176,33 @@ export function useGame() {
 
   const continueFromPass = useCallback(() => setPassScreenFor(null), []);
 
-  const resetEverything = useCallback(() => {
-    const fresh = restartGame();
-    setGame(fresh);
-    setSelectedId(firstLivingId(fresh));
-    setExpression(DEFAULT_EXPRESSION);
+  const restartNow = useCallback(() => beginMatch(restartGame(game)), [beginMatch, game]);
+
+  const goToMenu = useCallback(() => {
     setAnimation(null);
-    setEffects([]);
-    setMessage(null);
     setPassScreenFor(null);
-    setConfirmingRestart(false);
+    setConfirm(null);
+    setScreen('menu');
   }, []);
 
   const requestRestart = useCallback(() => {
-    if (game.status === 'playing') setConfirmingRestart(true);
-    else resetEverything();
-  }, [game.status, resetEverything]);
+    if (game.status === 'playing') setConfirm('restart');
+    else restartNow();
+  }, [game.status, restartNow]);
 
-  const cancelRestart = useCallback(() => setConfirmingRestart(false), []);
+  const requestMenu = useCallback(() => {
+    if (game.status === 'playing') setConfirm('menu');
+    else goToMenu();
+  }, [game.status, goToMenu]);
+
+  const cancelConfirm = useCallback(() => setConfirm(null), []);
 
   return {
+    screen,
     game,
-    selectedId,
-    selected,
+    active,
+    activeId,
+    direction,
     expression,
     setExpression,
     previewPoints,
@@ -191,18 +213,23 @@ export function useGame() {
     passEnabled,
     setPassEnabled,
     passScreenFor,
-    confirmingRestart,
+    confirm,
     isAnimating,
+    turnLocked,
     canFire,
-    selectSoldier,
+    startMatch,
+    clickSoldier,
+    toggleDirection,
     preview,
     fire,
     completeShot,
     continueFromPass,
     requestRestart,
-    confirmRestart: resetEverything,
-    playAgain: resetEverything,
-    cancelRestart,
+    requestMenu,
+    confirmAction: confirm === 'menu' ? goToMenu : restartNow,
+    cancelConfirm,
+    playAgain: restartNow,
+    goToMenu,
   };
 }
 

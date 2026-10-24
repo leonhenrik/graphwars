@@ -1,15 +1,15 @@
-export type PlayerId = 1 | 2;
+export type PlayerId = number;
 
-/** +1 = shots travel towards increasing x (right), -1 = towards decreasing x (left). */
+/** +1 = shots travel towards increasing world x (right), -1 = towards decreasing world x (left). */
 export type ShotDirection = 1 | -1;
 
 export interface Player {
   id: PlayerId;
   name: string;
   color: string;
-  direction: ShotDirection;
 }
 
+/** Every player controls exactly one soldier ("blob"). */
 export interface Soldier {
   id: string;
   playerId: PlayerId;
@@ -39,6 +39,15 @@ export interface Battlefield {
   obstacles: Obstacle[];
 }
 
+export type MapId = 'classic' | 'pillars' | 'scatter';
+
+export interface MatchConfig {
+  playerCount: number;
+  mapId: MapId;
+  /** Drives map generation; the same config always produces the same battlefield. */
+  seed: number;
+}
+
 export interface TurnState {
   currentPlayerId: PlayerId;
   turnNumber: number;
@@ -49,7 +58,8 @@ export interface TurnState {
 export type MatchStatus = 'playing' | 'over';
 
 export interface GameState {
-  players: Record<PlayerId, Player>;
+  config: MatchConfig;
+  players: Player[];
   soldiers: Soldier[];
   battlefield: Battlefield;
   turn: TurnState;
@@ -78,6 +88,7 @@ export type ShotOutcome = 'hit-soldier' | 'hit-obstacle' | 'miss';
 export interface ShotResult {
   shooterId: string;
   expression: string;
+  direction: ShotDirection;
   /** Path actually travelled, ending at the impact point (or the end of the trajectory for misses). */
   points: TrajectoryPoint[];
   outcome: ShotOutcome;

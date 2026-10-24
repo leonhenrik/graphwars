@@ -1,4 +1,4 @@
-import type { GameState, TrajectoryPoint } from '../../game/types';
+import type { GameState, ShotDirection, TrajectoryPoint } from '../../game/types';
 
 export interface Effect {
   id: number;
@@ -13,7 +13,9 @@ export const EFFECT_DURATION_MS = 900;
 
 export interface Scene {
   state: GameState;
-  selectedId: string | null;
+  /** The active player's soldier: the origin (0,0) of the function coordinate system. */
+  activeId: string | null;
+  direction: ShotDirection;
   preview: TrajectoryPoint[] | null;
   /** The shot being animated, already trimmed to the portion revealed so far. */
   shot: { points: TrajectoryPoint[]; color: string } | null;
@@ -73,27 +75,37 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   const px = (x: number) => (x - bounds.minX) * scale;
   const py = (y: number) => (bounds.maxY - y) * scale;
 
+  const active = scene.state.soldiers.find((s) => s.id === scene.activeId);
+  const ox = active ? active.x : 0;
+  const oy = active ? active.y : 0;
+  const dir = scene.direction;
+  // Local coordinate u (function x) = dir * (X - ox); local v (function y) = Y - oy.
+  const worldX = (u: number) => ox + dir * u;
+
   ctx.save();
   ctx.clearRect(0, 0, view.width, view.height);
 
-  // Background
   const bg = ctx.createLinearGradient(0, 0, 0, view.height);
   bg.addColorStop(0, '#0f172a');
   bg.addColorStop(1, '#111c33');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, view.width, view.height);
 
-  // Grid
-  for (let x = Math.ceil(bounds.minX); x <= bounds.maxX; x++) {
-    ctx.strokeStyle = x % 5 === 0 ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.07)';
+  // Grid, aligned to integer steps of the local coordinate system.
+  const maxU = Math.ceil(bounds.maxX - bounds.minX);
+  for (let u = -maxU; u <= maxU; u++) {
+    const x = worldX(u);
+    if (x < bounds.minX || x > bounds.maxX) continue;
+    ctx.strokeStyle = u % 5 === 0 ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.07)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(px(x), 0);
     ctx.lineTo(px(x), view.height);
     ctx.stroke();
   }
-  for (let y = Math.ceil(bounds.minY); y <= bounds.maxY; y++) {
-    ctx.strokeStyle = y % 5 === 0 ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.07)';
+  for (let v = Math.ceil(bounds.minY - oy); v <= bounds.maxY - oy; v++) {
+    const y = oy + v;
+    ctx.strokeStyle = v % 5 === 0 ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.07)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, py(y));
@@ -101,39 +113,46 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     ctx.stroke();
   }
 
-  // Axes
-  ctx.strokeStyle = 'rgba(226,232,240,0.7)';
+  // Axes through the active player
+  const axisColor = active ? scene.state.players.find((p) => p.id === active.playerId)?.color ?? '#e2e8f0' : '#e2e8f0';
+  ctx.strokeStyle = axisColor;
+  ctx.globalAlpha = 0.75;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(0, py(0));
-  ctx.lineTo(view.width, py(0));
-  ctx.moveTo(px(0), 0);
-  ctx.lineTo(px(0), view.height);
+  ctx.moveTo(0, py(oy));
+  ctx.lineTo(view.width, py(oy));
+  ctx.moveTo(px(ox), 0);
+  ctx.lineTo(px(ox), view.height);
   ctx.stroke();
+  ctx.globalAlpha = 1;
 
-  // Ticks and labels
+  // Ticks and labels in local coordinates (positive x points in the shooting direction)
   const fontSize = Math.max(9, Math.min(12, scale * 0.6));
   ctx.font = `${fontSize}px system-ui, sans-serif`;
-  ctx.fillStyle = 'rgba(203,213,225,0.75)';
+  ctx.fillStyle = 'rgba(203,213,225,0.8)';
   ctx.strokeStyle = 'rgba(226,232,240,0.7)';
   ctx.lineWidth = 1;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  for (let x = Math.ceil(bounds.minX / 5) * 5; x <= bounds.maxX; x += 5) {
+  for (let u = -Math.floor(maxU / 5) * 5; u <= maxU; u += 5) {
+    const x = worldX(u);
+    if (u === 0 || x < bounds.minX + 0.5 || x > bounds.maxX - 0.5) continue;
     ctx.beginPath();
-    ctx.moveTo(px(x), py(0) - 4);
-    ctx.lineTo(px(x), py(0) + 4);
+    ctx.moveTo(px(x), py(oy) - 4);
+    ctx.lineTo(px(x), py(oy) + 4);
     ctx.stroke();
-    if (x !== 0) ctx.fillText(String(x), px(x), py(0) + 6);
+    ctx.fillText(String(u), px(x), py(oy) + 6);
   }
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  for (let y = Math.ceil(bounds.minY / 5) * 5; y <= bounds.maxY; y += 5) {
+  for (let v = Math.ceil((bounds.minY - oy) / 5) * 5; v <= bounds.maxY - oy; v += 5) {
+    const y = oy + v;
+    if (v === 0 || y < bounds.minY + 0.5 || y > bounds.maxY - 0.5) continue;
     ctx.beginPath();
-    ctx.moveTo(px(0) - 4, py(y));
-    ctx.lineTo(px(0) + 4, py(y));
+    ctx.moveTo(px(ox) - 4, py(y));
+    ctx.lineTo(px(ox) + 4, py(y));
     ctx.stroke();
-    if (y !== 0) ctx.fillText(String(y), px(0) + 7, py(y));
+    ctx.fillText(String(v), px(ox) + 7, py(y));
   }
 
   // Obstacles
@@ -152,11 +171,10 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   }
 
   // Preview trajectory
-  const selected = scene.state.soldiers.find((s) => s.id === scene.selectedId);
-  if (scene.preview && scene.preview.length > 1 && selected) {
+  if (scene.preview && scene.preview.length > 1) {
     ctx.save();
-    ctx.strokeStyle = scene.state.players[selected.playerId].color;
-    ctx.globalAlpha = 0.65;
+    ctx.strokeStyle = axisColor;
+    ctx.globalAlpha = 0.7;
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 6]);
     strokePath(ctx, scene.preview, px, py);
@@ -183,7 +201,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
 
   // Soldiers
   for (const s of scene.state.soldiers) {
-    const color = scene.state.players[s.playerId].color;
+    const color = scene.state.players.find((p) => p.id === s.playerId)?.color ?? '#fff';
     const cx = px(s.x);
     const cy = py(s.y);
     const r = s.radius * scale;
@@ -198,7 +216,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       ctx.stroke();
       continue;
     }
-    if (s.id === scene.selectedId) {
+    if (s.id === scene.activeId) {
       const pulse = 0.5 + 0.5 * Math.sin(scene.now / 220);
       ctx.strokeStyle = '#fde047';
       ctx.globalAlpha = 0.6 + 0.4 * pulse;
@@ -207,6 +225,16 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       ctx.arc(cx, cy, r + 5 + pulse * 2, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
+
+      // Direction arrow
+      const ax = cx + dir * (r + 12);
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.moveTo(ax + dir * 10, cy);
+      ctx.lineTo(ax, cy - 6);
+      ctx.lineTo(ax, cy + 6);
+      ctx.closePath();
+      ctx.fill();
     }
     ctx.fillStyle = color;
     ctx.strokeStyle = '#0b1220';

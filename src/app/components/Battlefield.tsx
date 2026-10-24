@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { GameState, ShotResult, TrajectoryPoint } from '../../game/types';
+import type { GameState, ShotDirection, ShotResult, TrajectoryPoint } from '../../game/types';
 import { drawScene, partialPath, pathLength, EFFECT_DURATION_MS, type Effect } from './render';
 
 export interface ShotAnimation {
@@ -10,7 +10,8 @@ export interface ShotAnimation {
 
 interface Props {
   state: GameState;
-  selectedId: string | null;
+  activeId: string | null;
+  direction: ShotDirection;
   preview: TrajectoryPoint[] | null;
   animation: ShotAnimation | null;
   effects: Effect[];
@@ -22,7 +23,8 @@ const UNITS_PER_SECOND = 32;
 
 export function Battlefield({
   state,
-  selectedId,
+  activeId,
+  direction,
   preview,
   animation,
   effects,
@@ -56,12 +58,17 @@ export function Battlefield({
   }, [aspect]);
 
   // The render loop reads the latest props via a ref so it never needs restarting.
-  const latest = useRef({ state, selectedId, preview, effects, onAnimationComplete });
-  latest.current = { state, selectedId, preview, effects, onAnimationComplete };
+  const latest = useRef({ state, activeId, direction, preview, effects, onAnimationComplete });
+  latest.current = { state, activeId, direction, preview, effects, onAnimationComplete };
 
-  const animRef = useRef<{ id: number; start: number; duration: number; shot: ShotResult; color: string; done: boolean } | null>(
-    null,
-  );
+  const animRef = useRef<{
+    id: number;
+    start: number;
+    duration: number;
+    shot: ShotResult;
+    color: string;
+    done: boolean;
+  } | null>(null);
   useEffect(() => {
     if (!animation) {
       animRef.current = null;
@@ -107,18 +114,15 @@ export function Battlefield({
       }
 
       const liveEffects = cur.effects.filter((e) => now - e.startedAt <= EFFECT_DURATION_MS);
-      drawScene(
-        ctx,
-        size,
-        {
-          state: cur.state,
-          selectedId: cur.selectedId,
-          preview: anim ? null : cur.preview,
-          shot: shotScene,
-          effects: liveEffects,
-          now,
-        },
-      );
+      drawScene(ctx, size, {
+        state: cur.state,
+        activeId: cur.activeId,
+        direction: cur.direction,
+        preview: anim ? null : cur.preview,
+        shot: shotScene,
+        effects: liveEffects,
+        now,
+      });
 
       if (finished !== null) cur.onAnimationComplete(finished);
       raf = requestAnimationFrame(frame);

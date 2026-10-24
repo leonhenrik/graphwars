@@ -6,11 +6,17 @@ export type TrajectoryResult =
   | { ok: false; error: string };
 
 /**
- * Builds the trajectory y(x) = f(x) + c, with c = y0 - f(x0), so the curve passes through the
- * shooter at (x0, y0). `x` is the absolute battlefield x-coordinate.
+ * Builds the trajectory for a shooter at world position (x0, y0).
  *
- * Direction: `direction` = +1 samples x upwards (shot travels right), -1 samples x downwards
- * (shot travels left). Player 1 (left side) shoots right, Player 2 (right side) shoots left.
+ * Coordinate system: the shooter is ALWAYS the origin (0, 0) of the function. With local coordinate
+ *   u = direction * (X - x0)
+ * (so u grows in the direction of travel), the world curve is
+ *   Y(u) = y0 + f(u) - f(0)
+ * i.e. the entered f is evaluated in local coordinates and shifted vertically so it passes through
+ * the shooter (c = -f(0) in local terms, equivalent to c = y0 - f(x0) in world terms).
+ *
+ * Direction: `direction` = +1 travels towards increasing world X (right) and evaluates f on u = X - x0;
+ * -1 travels left and mirrors the function (u = x0 - X).
  *
  * Sampling starts at the shooter and moves in SAMPLE_STEP increments until the curve:
  *   - reaches the left/right battlefield edge          -> end 'boundary'
@@ -20,38 +26,38 @@ export type TrajectoryResult =
  * Nothing here throws for bad math; the evaluator is wrapped defensively.
  */
 export function computeTrajectory(
-  evaluate: (x: number) => number,
+  evaluate: (u: number) => number,
   origin: TrajectoryPoint,
   direction: ShotDirection,
   bounds: Bounds,
   step: number = SAMPLE_STEP,
 ): TrajectoryResult {
-  const safeEval = (x: number): number => {
+  const safeEval = (u: number): number => {
     try {
-      return evaluate(x);
+      return evaluate(u);
     } catch {
       return Number.NaN;
     }
   };
 
-  const f0 = safeEval(origin.x);
+  const f0 = safeEval(0);
   if (!Number.isFinite(f0)) {
-    return { ok: false, error: `The function is undefined at the shooter's position (x = ${round(origin.x)}).` };
+    return { ok: false, error: 'The function is undefined at x = 0 (your position). Try another function.' };
   }
-  const c = origin.y - f0;
 
   const points: TrajectoryPoint[] = [{ x: origin.x, y: origin.y }];
-  const edgeX = direction === 1 ? bounds.maxX : bounds.minX;
-  const maxSteps = Math.ceil((bounds.maxX - bounds.minX) / step) + 2;
+  const uEdge = direction === 1 ? bounds.maxX - origin.x : origin.x - bounds.minX;
+  const maxSteps = Math.ceil(Math.max(uEdge, 0) / step) + 2;
   let end: TrajectoryEnd = 'boundary';
 
   for (let k = 1; k <= maxSteps; k++) {
-    let x = origin.x + direction * k * step;
-    const pastEdge = direction === 1 ? x >= edgeX : x <= edgeX;
-    if (pastEdge) x = edgeX;
+    let u = k * step;
+    const pastEdge = u >= uEdge;
+    if (pastEdge) u = uEdge;
+    if (u <= 0) break;
 
-    const fx = safeEval(x);
-    const y = fx + c;
+    const x = origin.x + direction * u;
+    const y = origin.y + safeEval(u) - f0;
     const prev = points[points.length - 1] as TrajectoryPoint;
 
     if (!Number.isFinite(y)) {
@@ -67,7 +73,7 @@ export function computeTrajectory(
       break;
     }
 
-    if (x !== prev.x) points.push({ x, y });
+    points.push({ x, y });
     if (pastEdge) {
       end = 'boundary';
       break;
@@ -93,8 +99,4 @@ export function describeTrajectoryEnd(end: TrajectoryEnd): string {
     case 'discontinuity':
       return 'hits a discontinuity';
   }
-}
-
-function round(n: number): number {
-  return Math.round(n * 100) / 100;
 }

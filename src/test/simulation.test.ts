@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, getLivingSoldiers, restartGame } from '../game/gameState';
+import { createInitialState, defaultDirection, restartGame } from '../game/gameState';
 import { applyShot, simulateShot } from '../game/simulation';
-import { advanceTurn, markFired, validateShooter } from '../game/turnManager';
+import { advanceTurn, getActiveSoldierId, markFired, validateShooter } from '../game/turnManager';
 import type { GameState, Obstacle, Soldier } from '../game/types';
 
-function soldier(id: string, playerId: 1 | 2, x: number, y: number, alive = true): Soldier {
+function soldier(id: string, playerId: number, x: number, y: number, alive = true): Soldier {
   return { id, playerId, label: id, x, y, radius: 0.8, alive };
 }
 
+/** Player n owns soldier ids[n-1]. */
 function makeState(soldiers: Soldier[], obstacles: Obstacle[] = []): GameState {
-  const base = createInitialState();
+  const base = createInitialState({ playerCount: soldiers.length, mapId: 'classic', seed: 1 });
   return { ...base, soldiers, battlefield: { ...base.battlefield, obstacles } };
 }
 
-function shoot(state: GameState, id: string, expr: string) {
-  const r = simulateShot(state, id, expr);
+function shoot(state: GameState, id: string, expr: string, dir: 1 | -1 = 1) {
+  const r = simulateShot(state, id, expr, dir);
   if (!r.ok) throw new Error(r.error);
   return r.shot;
 }
@@ -22,43 +23,30 @@ function shoot(state: GameState, id: string, expr: string) {
 const alive = (s: GameState, id: string) => s.soldiers.find((x) => x.id === id)!.alive;
 
 describe('simulation – hits', () => {
-  it('eliminates an enemy that is hit', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('e', 2, 10, 0), soldier('e2', 2, 10, 12)]);
+  it('eliminates the player that is hit', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0), soldier('c', 3, 10, 12)]);
     const shot = shoot(s, 'a', '0');
     expect(shot.outcome).toBe('hit-soldier');
-    expect(shot.targetId).toBe('e');
+    expect(shot.targetId).toBe('b');
     const next = applyShot(s, shot);
-    expect(alive(next, 'e')).toBe(false);
-    expect(alive(next, 'e2')).toBe(true);
+    expect(alive(next, 'b')).toBe(false);
+    expect(alive(next, 'c')).toBe(true);
     expect(alive(next, 'a')).toBe(true);
   });
 
-  it('applies friendly fire', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('f', 1, 0, 0), soldier('e', 2, 15, 0)]);
-    const shot = shoot(s, 'a', '0');
-    expect(shot.targetId).toBe('f');
-    const next = applyShot(s, shot);
-    expect(alive(next, 'f')).toBe(false);
-    expect(alive(next, 'e')).toBe(true);
-  });
-
   it('stops at an obstacle without eliminating anyone', () => {
-    const s = makeState(
-      [soldier('a', 1, -10, 0), soldier('e', 2, 10, 0)],
-      [{ id: 'rock', x: 0, y: 0, radius: 2 }],
-    );
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)], [{ id: 'rock', x: 0, y: 0, radius: 2 }]);
     const shot = shoot(s, 'a', '0');
     expect(shot.outcome).toBe('hit-obstacle');
     expect(shot.targetId).toBe('rock');
     expect(shot.impact!.x).toBeCloseTo(-2, 1);
     expect(shot.points[shot.points.length - 1]).toEqual(shot.impact);
-    const next = applyShot(s, shot);
-    expect(next.soldiers.every((x) => x.alive)).toBe(true);
+    expect(applyShot(s, shot).soldiers.every((x) => x.alive)).toBe(true);
   });
 
   it('resolves the first collision when several targets lie on the path', () => {
     const s = makeState(
-      [soldier('a', 1, -20, 0), soldier('near', 2, -5, 0), soldier('far', 2, 15, 0)],
+      [soldier('a', 1, -20, 0), soldier('near', 2, -5, 0), soldier('far', 3, 15, 0)],
       [{ id: 'rock', x: 5, y: 0, radius: 2 }],
     );
     const shot = shoot(s, 'a', '0');
@@ -68,28 +56,38 @@ describe('simulation – hits', () => {
     expect(alive(next, 'far')).toBe(true);
   });
 
-  it('lets an obstacle shield a soldier behind it', () => {
-    const s = makeState(
-      [soldier('a', 1, -20, 0), soldier('far', 2, 15, 0)],
-      [{ id: 'rock', x: -5, y: 0, radius: 2 }],
-    );
+  it('lets an obstacle shield a player behind it', () => {
+    const s = makeState([soldier('a', 1, -20, 0), soldier('far', 2, 15, 0)], [{ id: 'rock', x: -5, y: 0, radius: 2 }]);
     expect(shoot(s, 'a', '0').targetId).toBe('rock');
   });
 
-  it('ignores eliminated soldiers and the shooter itself', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('dead', 2, 0, 0, false), soldier('e', 2, 10, 0)]);
+  it('ignores eliminated players and the shooter itself', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('dead', 2, 0, 0, false), soldier('e', 3, 10, 0)]);
     expect(shoot(s, 'a', '0').targetId).toBe('e');
   });
 
-  it('shoots leftwards for player 2', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('e', 2, 10, 0)]);
-    const turn2 = advanceTurn(s);
-    const shot = shoot(turn2, 'e', '0');
-    expect(shot.targetId).toBe('a');
+  it('shoots leftwards when the direction is flipped', () => {
+    const s = advanceTurn(makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)]));
+    expect(shoot(s, 'b', '0', -1).targetId).toBe('a');
+    // Facing right from b there is nothing but the wall.
+    expect(shoot(s, 'b', '0', 1).outcome).toBe('miss');
+  });
+
+  it('flipping the direction mirrors the function', () => {
+    // f = x/4 rises along the direction of travel: going left, the curve rises to the left.
+    const s = makeState([soldier('a', 1, 0, 0)]);
+    const right = shoot(s, 'a', 'x/4', 1);
+    const left = shoot(s, 'a', 'x/4', -1);
+    const lastR = right.points[right.points.length - 1]!;
+    const lastL = left.points[left.points.length - 1]!;
+    expect(lastR.x).toBeGreaterThan(0);
+    expect(lastL.x).toBeLessThan(0);
+    expect(lastR.y).toBeGreaterThan(0);
+    expect(lastL.y).toBeGreaterThan(0);
   });
 
   it('a missed shot eliminates nobody', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('e', 2, 10, 8)]);
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 8)]);
     const shot = shoot(s, 'a', '0');
     expect(shot.outcome).toBe('miss');
     expect(shot.targetId).toBeNull();
@@ -100,11 +98,11 @@ describe('simulation – hits', () => {
 
   it('is deterministic', () => {
     const s = createInitialState();
-    expect(simulateShot(s, 'p1-s1', 'sin(x)')).toEqual(simulateShot(s, 'p1-s1', 'sin(x)'));
+    expect(simulateShot(s, 'p1', 'sin(x)', 1)).toEqual(simulateShot(s, 'p1', 'sin(x)', 1));
   });
 
   it('does not mutate the input state', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('e', 2, 10, 0)]);
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)]);
     const copy = structuredClone(s);
     applyShot(s, shoot(s, 'a', '0'));
     expect(s).toEqual(copy);
@@ -116,9 +114,8 @@ describe('simulation – bad input never crashes', () => {
   it.each(['', 'sin(', '1/0', '1/x', 'sqrt(x)', 'log(x)', 'tan(x)', 'x^1000', 'exp(x*100)', '(-8)^(1/3)', 'foo', 'x=1'])(
     '%j',
     (expr) => {
-      const a = simulateShot(s, 'p1-s1', expr);
-      const b = simulateShot(s, 'p2-s1' as string, expr);
-      for (const r of [a, b]) {
+      for (const dir of [1, -1] as const) {
+        const r = simulateShot(s, 'p1', expr, dir);
         if (r.ok) expect(r.shot.points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
         else expect(typeof r.error).toBe('string');
       }
@@ -126,13 +123,12 @@ describe('simulation – bad input never crashes', () => {
   );
 
   it('explains functions that cannot produce a trajectory', () => {
-    const r = simulateShot(s, 'p1-s1', 'x^1000');
-    expect(r.ok).toBe(false);
+    expect(simulateShot(s, 'p1', '1000*x', 1).ok).toBe(false);
   });
 
   it('partial trajectories still resolve (stops at the undefined point)', () => {
-    const state = makeState([soldier('a', 1, -10, 0), soldier('e', 2, 10, 0)]);
-    const r = simulateShot(state, 'a', 'sqrt(5 - x)');
+    const state = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 8)]);
+    const r = simulateShot(state, 'a', 'sqrt(5 - x)', 1);
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.shot.outcome).toBe('miss');
@@ -142,60 +138,70 @@ describe('simulation – bad input never crashes', () => {
 });
 
 describe('turns', () => {
-  it('prevents eliminated soldiers, enemy soldiers, and double fire', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('dead', 1, -12, 5, false), soldier('e', 2, 10, 0)]);
+  it('prevents eliminated players, other players, and double fire', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('dead', 2, -12, 5, false), soldier('e', 3, 10, 0)]);
     expect(validateShooter(s, 'a')).toBeNull();
     expect(validateShooter(s, 'dead')).toMatch(/eliminated/);
-    expect(validateShooter(s, 'e')).toMatch(/belongs to/);
-    expect(validateShooter(s, null)).toMatch(/Select/);
-    expect(validateShooter(s, 'nope')).toMatch(/Select/);
+    expect(validateShooter(s, 'e')).toMatch(/not Player 3's turn/);
+    expect(validateShooter(s, null)).toMatch(/No shooter/);
+    expect(validateShooter(s, 'nope')).toMatch(/No shooter/);
     expect(validateShooter(markFired(s), 'a')).toMatch(/already fired/);
-    expect(simulateShot(s, 'dead', '0').ok).toBe(false);
+    expect(simulateShot(s, 'dead', '0', 1).ok).toBe(false);
   });
 
-  it('alternates between players', () => {
-    let s = createInitialState();
+  it('rotates through all players in order', () => {
+    let s = createInitialState({ playerCount: 3, mapId: 'classic', seed: 1 });
+    const order: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      order.push(s.turn.currentPlayerId);
+      s = advanceTurn(s);
+    }
+    expect(order).toEqual([1, 2, 3, 1, 2, 3]);
+    expect(s.turn.turnNumber).toBe(7);
+  });
+
+  it('skips eliminated players', () => {
+    let s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 0, 5, false), soldier('c', 3, 10, 0)]);
+    s = advanceTurn(s);
+    expect(s.turn.currentPlayerId).toBe(3);
+    s = advanceTurn(s);
     expect(s.turn.currentPlayerId).toBe(1);
-    s = advanceTurn(s);
-    expect(s.turn).toMatchObject({ currentPlayerId: 2, turnNumber: 2, hasFired: false });
-    s = advanceTurn(s);
-    expect(s.turn).toMatchObject({ currentPlayerId: 1, turnNumber: 3 });
+    expect(getActiveSoldierId(s)).toBe('a');
   });
 
-  it('ends the match when a team has no living soldiers', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('e', 2, 10, 0)]);
-    const next = applyShot(s, shoot(s, 'a', '0'));
-    expect(next.status).toBe('over');
-    expect(next.winnerId).toBe(1);
-    expect(getLivingSoldiers(next, 2)).toHaveLength(0);
-    expect(validateShooter(next, 'a')).toMatch(/over/);
+  it('keeps playing until only one player is left, then declares them the winner', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0), soldier('c', 3, 10, 12)]);
+    const afterFirst = applyShot(s, shoot(s, 'a', '0'));
+    expect(afterFirst.status).toBe('playing');
+    expect(afterFirst.winnerId).toBeNull();
+    expect(afterFirst.turn.currentPlayerId).toBe(3); // player 2 is out
+
+    const final = applyShot(afterFirst, shoot(afterFirst, 'c', '-0.6*x', -1));
+    expect(alive(final, 'a')).toBe(false);
+    expect(final.status).toBe('over');
+    expect(final.winnerId).toBe(3);
+
+    const duel = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)]);
+    const over = applyShot(duel, shoot(duel, 'a', '0'));
+    expect(over.status).toBe('over');
+    expect(over.winnerId).toBe(1);
+    expect(validateShooter(over, 'a')).toMatch(/over/);
   });
 
-  it('friendly fire does not end the match while the shooter survives', () => {
-    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 1, 0, 0), soldier('e', 2, 10, 5)]);
-    const next = applyShot(s, shoot(s, 'a', '0'));
-    expect(alive(next, 'b')).toBe(false);
-    expect(next.status).toBe('playing');
-    expect(next.winnerId).toBeNull();
+  it('defaults the direction towards the middle of the field', () => {
+    expect(defaultDirection(soldier('l', 1, -10, 0))).toBe(1);
+    expect(defaultDirection(soldier('r', 2, 10, 0))).toBe(-1);
   });
 });
 
 describe('restart', () => {
   it('restores the initial state exactly', () => {
-    let s = createInitialState();
+    let s = createInitialState({ playerCount: 3, mapId: 'pillars', seed: 7 });
     const initial = structuredClone(s);
-    const shot = shoot(s, 'p1-s1', 'sin(x)');
+    const shot = shoot(s, 'p1', 'sin(x)', defaultDirection(s.soldiers[0]!));
     s = applyShot(markFired(s), shot);
     s = advanceTurn(s);
     expect(s).not.toEqual(initial);
-    expect(restartGame()).toEqual(initial);
-  });
-
-  it('default layout is deterministic with 3 soldiers per team', () => {
-    const s = createInitialState();
-    expect(getLivingSoldiers(s, 1)).toHaveLength(3);
-    expect(getLivingSoldiers(s, 2)).toHaveLength(3);
-    expect(s.battlefield.obstacles.length).toBeGreaterThan(0);
-    expect(createInitialState()).toEqual(s);
+    expect(restartGame(s)).toEqual(initial);
   });
 });

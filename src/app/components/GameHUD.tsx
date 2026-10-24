@@ -1,46 +1,29 @@
-import { getLivingSoldiers } from '../../game/gameState';
-import type { GameState, PlayerId, Soldier } from '../../game/types';
+import type { GameState } from '../../game/types';
 
-interface Props {
-  game: GameState;
-  selected: Soldier | undefined;
-}
-
-export function GameHUD({ game, selected }: Props) {
+export function GameHUD({ game }: { game: GameState }) {
+  const living = game.soldiers.filter((s) => s.alive).length;
   return (
-    <section className="panel-section" aria-label="Teams">
-      <h2>Teams</h2>
+    <section className="panel-section" aria-label="Players">
+      <h2>
+        Players <span data-testid="living-count">{living}/{game.players.length}</span> alive
+      </h2>
       <div className="teams">
-        {([1, 2] as PlayerId[]).map((id) => {
-          const player = game.players[id];
-          const living = getLivingSoldiers(game, id).length;
-          const total = game.soldiers.filter((s) => s.playerId === id).length;
-          const active = game.status === 'playing' && game.turn.currentPlayerId === id;
+        {game.players.map((player) => {
+          const alive = game.soldiers.some((s) => s.playerId === player.id && s.alive);
+          const active = game.status === 'playing' && game.turn.currentPlayerId === player.id;
           return (
             <div
-              key={id}
-              className={`team-card${active ? ' active' : ''}`}
+              key={player.id}
+              className={`team-card${active ? ' active' : ''}${alive ? '' : ' dead'}`}
               style={{ borderColor: active ? player.color : undefined }}
-              data-testid={`team-${id}`}
+              data-testid={`player-${player.id}`}
             >
-              <span className="dot" style={{ background: player.color }} />
+              <span className="dot" style={{ background: alive ? player.color : '#475569' }} />
               <span className="team-name">{player.name}</span>
-              <span className="team-count" data-testid={`living-${id}`}>
-                {living}/{total}
-              </span>
+              <span className="team-count">{alive ? 'alive' : 'out'}</span>
             </div>
           );
         })}
-      </div>
-      <div className="selected-info" data-testid="selected-info">
-        {selected ? (
-          <>
-            Shooter: <strong>Soldier {selected.label}</strong> at ({selected.x}, {selected.y}) · fires{' '}
-            {game.players[selected.playerId].direction === 1 ? 'right →' : '← left'}
-          </>
-        ) : (
-          'No soldier selected. Click one of your soldiers on the battlefield.'
-        )}
       </div>
     </section>
   );

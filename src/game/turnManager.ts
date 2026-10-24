@@ -1,49 +1,52 @@
-import { getLivingSoldiers, getSoldier, otherPlayer } from './gameState';
-import type { GameState, PlayerId, Soldier } from './types';
+import { getLivingSoldiers, getPlayer, getPlayerSoldier } from './gameState';
+import type { GameState, PlayerId } from './types';
 
-/** Returns an error message if `soldierId` may not shoot right now, otherwise null. */
+/** The active player's soldier is the only valid shooter. Returns an error message, or null if OK. */
 export function validateShooter(state: GameState, soldierId: string | null): string | null {
   if (state.status === 'over') return 'The match is over. Start a new game.';
   if (state.turn.hasFired) return 'You already fired this turn.';
-  const soldier = getSoldier(state, soldierId);
-  if (!soldier) return 'Select one of your soldiers first.';
-  if (!soldier.alive) return 'That soldier has been eliminated.';
+  const soldier = state.soldiers.find((s) => s.id === soldierId);
+  if (!soldier) return 'No shooter selected.';
+  if (!soldier.alive) return 'That player has been eliminated.';
   if (soldier.playerId !== state.turn.currentPlayerId) {
-    return `That soldier belongs to ${state.players[soldier.playerId].name}.`;
+    return `It is not ${getPlayer(state, soldier.playerId).name}'s turn.`;
   }
   return null;
 }
 
-export function canSelectSoldier(state: GameState, soldier: Soldier): boolean {
-  return state.status === 'playing' && soldier.alive && soldier.playerId === state.turn.currentPlayerId;
+export function getActiveSoldierId(state: GameState): string | null {
+  return getPlayerSoldier(state, state.turn.currentPlayerId)?.id ?? null;
 }
 
 export function getWinner(state: GameState): PlayerId | null {
-  const p1 = getLivingSoldiers(state, 1).length;
-  const p2 = getLivingSoldiers(state, 2).length;
-  if (p1 === 0 && p2 === 0) return null;
-  if (p1 === 0) return 2;
-  if (p2 === 0) return 1;
-  return null;
+  const living = getLivingSoldiers(state);
+  return living.length === 1 ? (living[0] as { playerId: PlayerId }).playerId : null;
 }
 
 export function markFired(state: GameState): GameState {
   return { ...state, turn: { ...state.turn, hasFired: true } };
 }
 
-/** Ends the turn: checks for a winner, otherwise hands control to the other player. */
+/** Next living player after `current`, wrapping around; skips eliminated players. */
+export function nextLivingPlayer(state: GameState, current: PlayerId): PlayerId | null {
+  const n = state.players.length;
+  for (let step = 1; step <= n; step++) {
+    const candidate = state.players[(current - 1 + step) % n];
+    if (candidate && state.soldiers.some((s) => s.playerId === candidate.id && s.alive)) return candidate.id;
+  }
+  return null;
+}
+
+/** Ends the turn: checks for a winner (last player standing), otherwise hands control to the next living player. */
 export function advanceTurn(state: GameState): GameState {
-  const living1 = getLivingSoldiers(state, 1).length;
-  const living2 = getLivingSoldiers(state, 2).length;
-  if (living1 === 0 || living2 === 0) {
+  const living = getLivingSoldiers(state).length;
+  if (living <= 1) {
     return { ...state, status: 'over', winnerId: getWinner(state), turn: { ...state.turn, hasFired: true } };
   }
+  const next = nextLivingPlayer(state, state.turn.currentPlayerId);
+  if (next === null) return { ...state, status: 'over', winnerId: null };
   return {
     ...state,
-    turn: {
-      currentPlayerId: otherPlayer(state.turn.currentPlayerId),
-      turnNumber: state.turn.turnNumber + 1,
-      hasFired: false,
-    },
+    turn: { currentPlayerId: next, turnNumber: state.turn.turnNumber + 1, hasFired: false },
   };
 }

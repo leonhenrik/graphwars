@@ -3,7 +3,7 @@ import { parseExpression } from './expressionParser';
 import { getSoldier } from './gameState';
 import { computeTrajectory, isUsableTrajectory } from './trajectory';
 import { advanceTurn, validateShooter } from './turnManager';
-import type { GameState, ShotResult, Trajectory } from './types';
+import type { GameState, ShotDirection, ShotResult, Trajectory } from './types';
 
 export type ShotAttempt = { ok: true; shot: ShotResult } | { ok: false; error: string };
 
@@ -12,9 +12,10 @@ export function buildTrajectory(
   state: GameState,
   soldierId: string,
   expression: string,
+  direction: ShotDirection,
 ): { ok: true; trajectory: Trajectory } | { ok: false; error: string } {
   const soldier = getSoldier(state, soldierId);
-  if (!soldier) return { ok: false, error: 'Select one of your soldiers first.' };
+  if (!soldier) return { ok: false, error: 'No shooter selected.' };
 
   const parsed = parseExpression(expression);
   if (!parsed.ok) return parsed;
@@ -22,7 +23,7 @@ export function buildTrajectory(
   const result = computeTrajectory(
     parsed.evaluate,
     { x: soldier.x, y: soldier.y },
-    state.players[soldier.playerId].direction,
+    direction,
     state.battlefield.bounds,
   );
   if (!result.ok) return result;
@@ -30,7 +31,7 @@ export function buildTrajectory(
   if (!isUsableTrajectory(result.trajectory)) {
     return {
       ok: false,
-      error: 'This function leaves the battlefield (or is undefined) immediately from this soldier. Try a gentler curve.',
+      error: 'This function leaves the battlefield (or is undefined) immediately. Try a gentler curve or flip the direction.',
     };
   }
   return result;
@@ -40,11 +41,16 @@ export function buildTrajectory(
  * Pure simulation of one shot: finds the first collision along the trajectory.
  * Does not modify `state`; apply the result with `applyShot`.
  */
-export function simulateShot(state: GameState, soldierId: string, expression: string): ShotAttempt {
+export function simulateShot(
+  state: GameState,
+  soldierId: string,
+  expression: string,
+  direction: ShotDirection,
+): ShotAttempt {
   const shooterError = validateShooter(state, soldierId);
   if (shooterError) return { ok: false, error: shooterError };
 
-  const built = buildTrajectory(state, soldierId, expression);
+  const built = buildTrajectory(state, soldierId, expression, direction);
   if (!built.ok) return built;
   const { trajectory } = built;
 
@@ -61,6 +67,7 @@ export function simulateShot(state: GameState, soldierId: string, expression: st
       shot: {
         shooterId: soldierId,
         expression,
+        direction,
         points: trajectory.points,
         outcome: 'miss',
         targetId: null,
@@ -76,6 +83,7 @@ export function simulateShot(state: GameState, soldierId: string, expression: st
     shot: {
       shooterId: soldierId,
       expression,
+      direction,
       points,
       outcome: collision.target.kind === 'soldier' ? 'hit-soldier' : 'hit-obstacle',
       targetId: collision.target.id,
@@ -85,7 +93,7 @@ export function simulateShot(state: GameState, soldierId: string, expression: st
   };
 }
 
-/** Applies a completed shot: eliminates a hit soldier (friend or foe), then advances the turn. */
+/** Applies a completed shot: eliminates a hit player, then advances the turn. */
 export function applyShot(state: GameState, shot: ShotResult): GameState {
   const soldiers =
     shot.outcome === 'hit-soldier'

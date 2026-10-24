@@ -369,6 +369,182 @@ body {
   color: var(--muted);
 }
 
+.teams {
+  flex-wrap: wrap;
+}
+
+.team-card {
+  flex: 1 1 45%;
+}
+
+.team-card.dead {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.fn-hint {
+  color: #64748b;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.key {
+  padding: 8px 0;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: 600 14px ui-monospace, Consolas, monospace;
+  cursor: pointer;
+}
+
+.key:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.key:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.key:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.key.fn {
+  color: #bae6fd;
+  font-size: 12px;
+}
+
+.key.op {
+  color: #fde68a;
+}
+
+.key.action {
+  color: #fca5a5;
+}
+
+.key.wide {
+  grid-column: 1 / -1;
+}
+
+.btn.direction {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.menu {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.menu-card {
+  width: min(820px, 100%);
+  padding: 28px 32px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.menu-card h1 {
+  margin: 0;
+  font-size: 34px;
+  letter-spacing: 0.04em;
+}
+
+.menu-card h2 {
+  margin: 22px 0 10px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.menu-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.segmented {
+  display: flex;
+  gap: 8px;
+}
+
+.seg {
+  width: 52px;
+  height: 44px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.seg.selected,
+.map-card.selected {
+  border-color: var(--accent);
+  background: #17305a;
+}
+
+.maps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.map-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 244px;
+  padding: 10px;
+  text-align: left;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.map-name {
+  font-weight: 700;
+}
+
+.map-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.thumb {
+  border-radius: 8px;
+}
+
+.shuffle {
+  margin-top: 12px;
+  flex: none;
+}
+
+.start {
+  display: block;
+  width: 100%;
+  margin-top: 24px;
+  padding: 14px;
+  font-size: 17px;
+}
+
 @media (max-width: 900px) {
   .main {
     flex-direction: column;
