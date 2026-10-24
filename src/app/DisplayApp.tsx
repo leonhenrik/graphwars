@@ -11,7 +11,7 @@ import { useSocket } from '../client/useSocket';
 import { defaultDirection, getPlayerSoldier, getSoldier } from '../game/gameState';
 import { getActiveSoldierId } from '../game/turnManager';
 import type { GameOptions, MapId } from '../game/types';
-import type { DisplayView, ServerMessage } from '../shared/protocol';
+import { photoUrl, type DisplayView, type ServerMessage } from '../shared/protocol';
 
 interface ServerInfo {
   port: number;
@@ -124,6 +124,11 @@ export function DisplayApp() {
   const simultaneous = view.options.shotMode === 'simultaneous';
   const current = view.members.find((m) => m.playerId === game.turn.currentPlayerId);
   const colorOf = (playerId: number) => view.members.find((m) => m.playerId === playerId)?.color ?? '#fff';
+  const photos: Record<number, string> = {};
+  for (const m of view.members) {
+    const url = photoUrl(m);
+    if (url) photos[m.playerId] = url;
+  }
 
   // Turn mode: the axes follow the active player. Simultaneous mode: plain world axes.
   const originId = over || simultaneous ? null : getActiveSoldierId(game);
@@ -175,6 +180,7 @@ export function DisplayApp() {
             activeIds={waitingIds}
             lockedIds={lockedIds}
             direction={direction}
+            photos={photos}
             previews={view.options.preview ? previews : []}
             traces={traces}
             animation={animation}

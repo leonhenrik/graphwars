@@ -30,6 +30,12 @@ interface Member {
   token: string;
   playerId: PlayerId;
   connected: boolean;
+  /** JPEG bytes of the player's selfie, shown inside their bubble on the big screen. */
+  photo: Buffer | null;
+  /** Unique per photo that was set; 0 when there is none. Used as a cache-busting version in the photo URL. */
+  photoRev: number;
+  /** Lobby only: removes the seat if the phone does not come back in time. */
+  dropTimer: ReturnType<typeof setTimeout> | null;
 }
 
 interface Draft {
@@ -46,7 +52,12 @@ interface PendingShots {
 export interface SessionOptions {
   /** Safety net: how long to wait for the display to finish animating the shots. */
   shotTimeoutMs?: number;
+  /** In the lobby a phone that drops (e.g. while its camera app is open) keeps its seat this long. */
+  lobbyGraceMs?: number;
 }
+
+/** Largest accepted selfie, in bytes of JPEG data. */
+export const MAX_PHOTO_BYTES = 24_000;
 
 /**
  * The authoritative state of one hosted match: lobby, players (one per phone), the game and the
@@ -72,10 +83,13 @@ export class Session {
   private countdown: ReturnType<typeof setTimeout> | null = null;
   private nextShotId = 1;
   private matchId = 0;
+  private photoCounter = 0;
   private readonly shotTimeoutMs: number;
+  private readonly lobbyGraceMs: number;
 
   constructor(options: SessionOptions = {}) {
     this.shotTimeoutMs = options.shotTimeoutMs ?? 12_000;
+    this.lobbyGraceMs = options.lobbyGraceMs ?? 30_000;
   }
 
   connect(client: Client): void {
@@ -88,20 +102,37 @@ export class Session {
       const stillThere = [...this.clients].some((c) => c.role === 'player' && c.token === client.token);
       const member = this.members.find((m) => m.token === client.token);
       if (member && !stillThere) {
+        member.connected = false;
         if (this.phase === 'lobby') {
-          this.members = this.members.filter((m) => m !== member);
-          this.renumber();
-        } else {
-          member.connected = false;
+          if (member.dropTimer) clearTimeout(member.dropTimer);
+          member.dropTimer = setTimeout(() => this.dropMember(member), this.lobbyGraceMs);
         }
       }
       this.broadcast();
     }
   }
 
+  private dropMember(member: Member): void {
+    if (member.dropTimer) clearTimeout(member.dropTimer);
+    member.dropTimer = null;
+    if (this.phase !== 'lobby' || member.connected) return;
+    this.members = this.members.filter((m) => m !== member);
+    this.renumber();
+    this.broadcast();
+  }
+
+  /** The selfie of a player (by player number), or null. */
+  getPhoto(playerId: PlayerId): Buffer | null {
+    return this.members.find((m) => m.playerId === playerId)?.photo ?? null;
+  }
+
   close(): void {
     this.cancelPending();
     this.stopCountdown();
+    for (const m of this.members) {
+      if (m.dropTimer) clearTimeout(m.dropTimer);
+      m.dropTimer = null;
+    }
   }
 
   handle(client: Client, message: ClientMessage): void {
@@ -138,10 +169,19 @@ export class Session {
         client.send({ type: 'rejected', text: `The game is full (${MAX_PLAYERS} players).` });
         return;
       }
-      member = { token: randomUUID(), playerId: this.members.length + 1, connected: true };
+      member = {
+        token: randomUUID(),
+        playerId: this.members.length + 1,
+        connected: true,
+        photo: null,
+        photoRev: 0,
+        dropTimer: null,
+      };
       this.members.push(member);
     }
     member.connected = true;
+    if (member.dropTimer) clearTimeout(member.dropTimer);
+    member.dropTimer = null;
     client.role = 'player';
     client.token = member.token;
     client.send({ type: 'welcome', token: member.token });
@@ -158,6 +198,8 @@ export class Session {
         return;
       case 'start':
         if (this.phase !== 'lobby') return;
+        // Phones that are offline at this point do not take part.
+        this.dropOfflineMembers();
         if (this.members.length < MIN_PLAYERS) {
           this.setNotice('error', `Waiting for players: at least ${MIN_PLAYERS} phones must join.`);
           return;
@@ -176,8 +218,7 @@ export class Session {
         this.drafts.clear();
         this.submissions.clear();
         this.notice = null;
-        this.members = this.members.filter((m) => m.connected);
-        this.renumber();
+        this.dropOfflineMembers();
         this.broadcast();
         return;
       case 'skipTurn':
@@ -193,7 +234,12 @@ export class Session {
 
   private handlePlayer(client: Client, message: ClientMessage): void {
     const member = this.members.find((m) => m.token === client.token);
-    if (!member || !this.canAct(member)) return;
+    if (!member) return;
+    if (message.type === 'photo') {
+      this.setPhoto(member, message.image);
+      return;
+    }
+    if (!this.canAct(member)) return;
 
     if (message.type === 'draft') {
       this.drafts.set(member.playerId, { expression: message.expression, direction: message.direction });
@@ -201,6 +247,30 @@ export class Session {
     } else if (message.type === 'fire') {
       this.fire(member, message.expression, message.direction);
     }
+  }
+
+  /** Selfies can only be taken or removed in the lobby, before the match starts. */
+  private setPhoto(member: Member, image: string | null): void {
+    if (this.phase !== 'lobby') return;
+    if (image === null) {
+      member.photo = null;
+      member.photoRev = 0;
+    } else {
+      const bytes = Buffer.from(image.slice(image.indexOf(',') + 1), 'base64');
+      const isJpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      if (!isJpeg || bytes.length > MAX_PHOTO_BYTES) return;
+      member.photo = bytes;
+      member.photoRev = ++this.photoCounter;
+    }
+    this.broadcast();
+  }
+
+  private dropOfflineMembers(): void {
+    for (const m of this.members) {
+      if (!m.connected && m.dropTimer) clearTimeout(m.dropTimer);
+    }
+    this.members = this.members.filter((m) => m.connected);
+    this.renumber();
   }
 
   private canAct(member: Member): boolean {
@@ -400,6 +470,7 @@ export class Session {
       color: this.colorOf(member.playerId),
       connected: member.connected,
       alive: soldier ? soldier.alive : true,
+      photoRev: member.photoRev,
     };
   }
 

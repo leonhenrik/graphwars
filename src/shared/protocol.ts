@@ -26,6 +26,13 @@ export interface MemberView {
   color: string;
   connected: boolean;
   alive: boolean;
+  /** 0 when the player has no selfie; otherwise a version number for the photo URL. */
+  photoRev: number;
+}
+
+/** URL of a player's selfie (served by the host), or null when they have none. */
+export function photoUrl(member: Pick<MemberView, 'playerId' | 'photoRev'>): string | null {
+  return member.photoRev > 0 ? `/api/photo/${member.playerId}?v=${member.photoRev}` : null;
 }
 
 /** What a phone is currently typing, validated (and, if the preview option is on, previewed) by the server. */
@@ -100,7 +107,9 @@ export type ClientMessage =
   | { type: 'skipTurn' }
   | { type: 'shotDone'; id: number }
   | { type: 'draft'; expression: string; direction: ShotDirection }
-  | { type: 'fire'; expression: string; direction: ShotDirection };
+  | { type: 'fire'; expression: string; direction: ShotDirection }
+  /** Lobby only: set (JPEG data URL) or remove (null) the player's selfie. */
+  | { type: 'photo'; image: string | null };
 
 export type ServerMessage =
   | { type: 'welcome'; token: string }
@@ -110,6 +119,9 @@ export type ServerMessage =
   | { type: 'rejected'; text: string };
 
 export const MAX_MESSAGE_EXPRESSION = 500;
+/** Selfies travel as base64 JPEG data URLs; this is the longest accepted string (about 22 KB of image). */
+export const MAX_PHOTO_CHARS = 32_000;
+const JPEG_DATA_URL = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 
 const MAP_IDS: MapId[] = ['classic', 'pillars', 'scatter'];
 const SHOT_MODES: ShotMode[] = ['turns', 'simultaneous'];
@@ -164,6 +176,11 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return { type: m.type };
     case 'shotDone':
       return typeof m.id === 'number' ? { type: 'shotDone', id: m.id } : null;
+    case 'photo':
+      if (m.image === null) return { type: 'photo', image: null };
+      return typeof m.image === 'string' && m.image.length <= MAX_PHOTO_CHARS && JPEG_DATA_URL.test(m.image)
+        ? { type: 'photo', image: m.image }
+        : null;
     case 'draft':
     case 'fire':
       return expression(m.expression) && direction(m.direction)

@@ -6,6 +6,7 @@ import { MAPS } from '../../game/battlefieldGenerator';
 import type { GameOptions, MapId, MatchConfig } from '../../game/types';
 import type { MemberView } from '../../shared/protocol';
 import { drawScene } from './render';
+import { Avatar } from './Avatar';
 
 interface Props {
   members: MemberView[];
@@ -40,6 +41,7 @@ function MapThumbnail({ config }: { config: MatchConfig }) {
       activeIds: [],
       lockedIds: [],
       direction: 1,
+      photos: {},
       traces: [],
       previews: [],
       shots: [],
@@ -147,8 +149,10 @@ function Segmented<T extends string>({
 }
 
 export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, onStart, notice }: Props) {
-  const thumbPlayers = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, members.length));
-  const canStart = members.length >= MIN_PLAYERS;
+  // Phones that dropped (e.g. while the camera app is open) keep their seat for a while but do not count yet.
+  const online = members.filter((m) => m.connected).length;
+  const thumbPlayers = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, online));
+  const canStart = online >= MIN_PLAYERS;
   const update = (patch: Partial<GameOptions>) => onConfigure(mapId, seed, { ...options, ...patch });
   const simultaneous = options.shotMode === 'simultaneous';
 
@@ -172,13 +176,21 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
               <div className="joined" data-testid="joined-players">
                 {members.length === 0 && <span className="menu-sub">Waiting for the first phone…</span>}
                 {members.map((m) => (
-                  <span key={m.playerId} className="avatar" style={{ ['--c' as string]: m.color }}>
-                    <span className="avatar-badge">{m.playerId}</span>
+                  <span
+                    key={m.playerId}
+                    className={`avatar${m.connected ? '' : ' offline'}`}
+                    style={{ ['--c' as string]: m.color }}
+                    title={m.connected ? undefined : 'Phone disconnected'}
+                  >
+                    <Avatar member={m} size={34}>
+                      {m.playerId}
+                    </Avatar>
                     {m.name}
+                    {!m.connected && <span aria-hidden="true"> ⚠</span>}
                   </span>
                 ))}
               </div>
-              <span hidden data-testid="player-count">{members.length}</span>
+              <span hidden data-testid="player-count">{online}</span>
             </Panel>
 
             <Panel title="Rules" step="3">
@@ -192,7 +204,7 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                 ]}
                 hint={
                   simultaneous
-                    ? 'Everyone enters a function in the same round. When all have fired, every shot is resolved together.'
+                    ? 'Everyone enters a function in the same round.'
                     : 'Players take turns. The shot is animated, then the next player is up.'
                 }
                 onChange={(shotMode) => update({ shotMode })}
@@ -280,7 +292,7 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
 
         {notice && <div className="message error" role="status">{notice}</div>}
         <button className="btn primary start" onClick={onStart} disabled={!canStart} data-testid="start-button">
-          {canStart ? `Start match with ${members.length} players` : `Waiting for players (need ${MIN_PLAYERS})`}
+          {canStart ? `Start match with ${online} players` : `Waiting for players (need ${MIN_PLAYERS})`}
         </button>
       </div>
     </div>

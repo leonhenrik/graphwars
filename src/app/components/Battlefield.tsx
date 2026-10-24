@@ -15,6 +15,7 @@ interface Props {
   activeIds: string[];
   lockedIds: string[];
   direction: ShotDirection;
+  photos: Record<number, string>;
   previews: PathLine[];
   /** Faint dashed traces of the previous shot(s), shown until the next shot is fired. */
   traces: PathLine[];
@@ -34,6 +35,7 @@ export function Battlefield({
   activeIds,
   lockedIds,
   direction,
+  photos,
   previews,
   traces,
   animation,
@@ -67,8 +69,8 @@ export function Battlefield({
   }, [aspect]);
 
   // The render loop reads the latest props via a ref so it never needs restarting.
-  const latest = useRef({ state, originId, activeIds, lockedIds, direction, previews, traces, effects, onAnimationComplete });
-  latest.current = { state, originId, activeIds, lockedIds, direction, previews, traces, effects, onAnimationComplete };
+  const latest = useRef({ state, originId, activeIds, lockedIds, direction, photos, previews, traces, effects, onAnimationComplete });
+  latest.current = { state, originId, activeIds, lockedIds, direction, photos, previews, traces, effects, onAnimationComplete };
 
   const animRef = useRef<{
     id: number;
@@ -130,6 +132,7 @@ export function Battlefield({
         activeIds: cur.activeIds,
         lockedIds: cur.lockedIds,
         direction: cur.direction,
+        photos: cur.photos,
         previews: anim ? [] : cur.previews,
         traces: anim ? [] : cur.traces,
         shots: shotLines,

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Avatar } from './components/Avatar';
 import { Calculator } from './components/Calculator';
 import { Countdown } from './components/Countdown';
+import { SelfieCard } from './components/SelfieCard';
 import { useSocket } from '../client/useSocket';
 import { DEFAULT_EXPRESSION } from '../game/constants';
 import type { ShotDirection } from '../game/types';
@@ -140,7 +142,7 @@ export function PlayerApp() {
   return (
     <div className="phone" data-testid="phone">
       <header className="phone-header" style={{ borderColor: you.color }}>
-        <span className="dot" style={{ background: you.color }} />
+        <Avatar member={you} size={30} />
         <strong data-testid="phone-name">You are {you.name}</strong>
         {!connected && <span className="offline-tag">reconnecting…</span>}
         {view.phase !== 'lobby' && (
@@ -153,6 +155,9 @@ export function PlayerApp() {
         {status.text}
       </div>
       {view.phase === 'lobby' && <div className="phone-rules">{rulesSummary(view)}</div>}
+      {view.phase === 'lobby' && (
+        <SelfieCard you={you} disabled={!connected} onPhoto={(image) => send({ type: 'photo', image })} />
+      )}
       {view.phase === 'playing' && <Countdown timer={view.timer} />}
 
       {view.phase !== 'lobby' && (

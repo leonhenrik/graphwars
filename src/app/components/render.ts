@@ -25,6 +25,8 @@ export interface Scene {
   /** Soldiers that already fired this round (simultaneous mode); shown with a green ring. */
   lockedIds: string[];
   direction: ShotDirection;
+  /** Selfie URLs by player number; a soldier with a loaded photo shows it inside an outline in their colour. */
+  photos: Record<number, string>;
   /** Faint dashed traces of the previous shot(s). */
   traces: PathLine[];
   previews: PathLine[];
@@ -86,6 +88,19 @@ interface StrokeStyle {
   width: number;
   dash?: number[];
   glow?: number;
+}
+
+const imageCache = new Map<string, HTMLImageElement>();
+
+/** Returns the image once it has loaded (starting the download on first use), otherwise null. */
+function loadedImage(url: string): HTMLImageElement | null {
+  let img = imageCache.get(url);
+  if (!img) {
+    img = new Image();
+    img.src = url;
+    imageCache.set(url, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
 }
 
 export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scene): void {
@@ -270,6 +285,24 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       ctx.beginPath();
       ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
       ctx.stroke();
+    }
+    const photoUrl = scene.photos[s.playerId];
+    const photo = photoUrl ? loadedImage(photoUrl) : null;
+    if (photo) {
+      // Selfie fills the bubble; only the outline keeps the player's colour.
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(photo, cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+      const outline = Math.max(3, r * 0.2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = outline;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - outline / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      continue;
     }
     ctx.fillStyle = color;
     ctx.strokeStyle = '#0b1220';

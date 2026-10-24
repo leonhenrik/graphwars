@@ -903,7 +903,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 14px 5px 6px;
+  padding: 4px 14px 4px 4px;
   background: color-mix(in srgb, var(--c) 18%, #0b1220);
   border: 2px solid var(--c);
   border-radius: 999px;
@@ -911,15 +911,55 @@ body {
   animation: pop 0.3s ease-out;
 }
 
-.avatar-badge {
+.avatar.offline {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+/* A player's bubble: solid colour with a number, or their selfie with an outline in their colour. */
+.avatar-dot {
   display: inline-grid;
+  flex-shrink: 0;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  box-sizing: border-box;
+  border: 2px solid;
   border-radius: 50%;
-  background: var(--c);
+  background-position: center;
+  background-size: cover;
   color: #0b1220;
   font-weight: 800;
+  line-height: 1;
+}
+
+.avatar-dot.has-photo {
+  border-width: 3px;
+}
+
+.selfie {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.selfie-actions {
+  flex: 1;
+  min-width: 0;
+}
+
+.selfie-hint {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.selfie-error {
+  margin: 8px 0 0;
+  color: #fca5a5;
+  font-size: 13px;
 }
 
 @keyframes pop {

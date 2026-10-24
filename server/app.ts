@@ -80,6 +80,23 @@ export async function startApp(options: AppOptions): Promise<App> {
       res.end(JSON.stringify({ port: actualPort, addresses: lanAddresses() }));
       return;
     }
+    const photoMatch = /^\/api\/photo\/(\d{1,2})$/.exec(url.pathname);
+    if (photoMatch) {
+      const photo = session.getPhoto(Number(photoMatch[1]));
+      if (!photo) {
+        res.writeHead(404).end('No photo');
+        return;
+      }
+      // The URL carries a version (?v=), so a given URL never changes: cache it hard.
+      res.writeHead(200, {
+        'content-type': 'image/jpeg',
+        'content-length': photo.length,
+        'cache-control': 'public, max-age=31536000, immutable',
+        'x-content-type-options': 'nosniff',
+      });
+      res.end(photo);
+      return;
+    }
     if (!staticDir) {
       res.writeHead(404).end('Not found');
       return;
@@ -106,7 +123,7 @@ export async function startApp(options: AppOptions): Promise<App> {
     res.end(readFileSync(file));
   });
 
-  const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4096 });
+  const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 40_000 });
   const alive = new WeakMap<WebSocket, boolean>();
 
   wss.on('connection', (socket, req) => {

@@ -118,6 +118,35 @@ describe('server over real WebSockets', () => {
     for (const p of [big, phone1, phone2]) p.socket.close();
   });
 
+  it('stores a selfie sent over the socket and serves it as an image', async () => {
+    app = await startApp({ port: 0, host: '127.0.0.1' });
+    const big = await Peer.connect(app.port);
+    big.send({ type: 'hello', role: 'display' });
+    const phone = await Peer.connect(app.port);
+    phone.send({ type: 'hello', role: 'player', token: null });
+    await phone.until(phone.lastPlayer());
+
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...new Array(2000).fill(9)]);
+    phone.send({ type: 'photo', image: `data:image/jpeg;base64,${jpeg.toString('base64')}` });
+    const view = await big.until(big.lastDisplay((v) => (v.members[0]?.photoRev ?? 0) > 0));
+    const rev = view.members[0]!.photoRev;
+
+    const res = await fetch(`http://127.0.0.1:${app.port}/api/photo/1?v=${rev}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/jpeg');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(jpeg);
+    expect((await fetch(`http://127.0.0.1:${app.port}/api/photo/2`)).status).toBe(404);
+    expect((await fetch(`http://127.0.0.1:${app.port}/api/photo/abc`)).status).toBe(404);
+
+    // A frame that is far too large is dropped by the server, which keeps working.
+    phone.socket.send('x'.repeat(60_000));
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await fetch(`http://127.0.0.1:${app.port}/api/info`)).status).toBe(200);
+
+    for (const p of [big, phone]) p.socket.close();
+  });
+
   it('serves the built client and falls back to index.html for /play', async () => {
     const { mkdtempSync, writeFileSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');

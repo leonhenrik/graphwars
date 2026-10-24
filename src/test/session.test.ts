@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Session, type Client } from '../../server/session';
+import { Session, MAX_PHOTO_BYTES, type Client } from '../../server/session';
 import { DEFAULT_OPTIONS } from '../game/constants';
 import { findShotWitness } from '../game/shotAnalysis';
 import type { GameOptions, MapId } from '../game/types';
 import {
+  MAX_PHOTO_CHARS,
   parseClientMessage,
   type DisplayView,
   type PlayerView,
@@ -11,6 +12,10 @@ import {
 } from '../shared/protocol';
 
 type ShotsMessage = Extract<ServerMessage, { type: 'shots' }>;
+
+/** A minimal but valid JPEG header (magic bytes) padded with data, as a data URL. */
+const jpegBytes = (length = 400) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...new Array(length).fill(7)]);
+const JPEG = `data:image/jpeg;base64,${jpegBytes().toString('base64')}`;
 
 interface TestClient extends Client {
   messages: ServerMessage[];
@@ -122,12 +127,53 @@ describe('lobby', () => {
     expect(display.display().game!.config.mapId).toBe('pillars');
   });
 
-  it('frees and renumbers seats when a phone leaves the lobby', () => {
+  it('keeps the seat of a dropped phone for a grace period, then frees and renumbers it', () => {
+    vi.useFakeTimers();
+    fresh();
     const [a, b, c] = [addPlayer(), addPlayer(), addPlayer()];
     session.disconnect(b);
+    expect(display.display().members.map((m) => m.connected)).toEqual([true, false, true]);
+
+    vi.advanceTimersByTime(30_001);
     expect(display.display().members).toHaveLength(2);
     expect(a.player().you.playerId).toBe(1);
     expect(c.player().you.playerId).toBe(2);
+  });
+
+  it('a phone that comes back within the grace period gets its seat (and selfie) back', () => {
+    vi.useFakeTimers();
+    fresh();
+    const a = addPlayer();
+    const token = a.welcomeToken();
+    session.handle(a, { type: 'photo', image: JPEG });
+    session.disconnect(a); // e.g. the camera app took over the browser
+
+    vi.advanceTimersByTime(20_000);
+    const back = addPlayer(token);
+    expect(back.player().you).toMatchObject({ playerId: 1, connected: true });
+    expect(back.player().you.photoRev).toBeGreaterThan(0);
+
+    vi.advanceTimersByTime(60_000); // the old drop timer must be gone
+    expect(display.display().members).toHaveLength(1);
+  });
+
+  it('offline phones do not take part when the match starts', () => {
+    const [a, b, c] = [addPlayer(), addPlayer(), addPlayer()];
+    session.disconnect(b);
+    configure();
+    session.handle(display, { type: 'start' });
+    expect(display.display().phase).toBe('playing');
+    expect(display.display().game!.players).toHaveLength(2);
+    expect(a.player().you.playerId).toBe(1);
+    expect(c.player().you.playerId).toBe(2);
+  });
+
+  it('does not start with fewer than two online phones', () => {
+    const [a] = [addPlayer(), addPlayer()];
+    session.disconnect(a);
+    session.handle(display, { type: 'start' });
+    expect(display.display().phase).toBe('lobby');
+    expect(display.display().notice?.kind).toBe('error');
   });
 
   it('caps the lobby at six players', () => {
@@ -617,6 +663,78 @@ describe('connection loss', () => {
   });
 });
 
+describe('selfies', () => {
+  it('a phone can set, replace and remove its selfie in the lobby; everybody sees the new version', () => {
+    const a = addPlayer();
+    addPlayer();
+    expect(display.display().members.map((m) => m.photoRev)).toEqual([0, 0]);
+
+    session.handle(a, { type: 'photo', image: JPEG });
+    const first = display.display().members[0]!.photoRev;
+    expect(first).toBeGreaterThan(0);
+    expect(a.player().you.photoRev).toBe(first);
+    expect(display.display().members[1]!.photoRev).toBe(0);
+    expect(session.getPhoto(1)).toEqual(jpegBytes());
+    expect(session.getPhoto(2)).toBeNull();
+
+    session.handle(a, { type: 'photo', image: `data:image/jpeg;base64,${jpegBytes(900).toString('base64')}` });
+    expect(display.display().members[0]!.photoRev).toBeGreaterThan(first);
+    expect(session.getPhoto(1)).toEqual(jpegBytes(900));
+
+    session.handle(a, { type: 'photo', image: null });
+    expect(display.display().members[0]!.photoRev).toBe(0);
+    expect(session.getPhoto(1)).toBeNull();
+  });
+
+  it('rejects data that is not a JPEG or is too big', () => {
+    const a = addPlayer();
+    const notJpeg = `data:image/jpeg;base64,${Buffer.from('<script>alert(1)</script>').toString('base64')}`;
+    session.handle(a, { type: 'photo', image: notJpeg });
+    expect(session.getPhoto(1)).toBeNull();
+
+    const tooBig = `data:image/jpeg;base64,${jpegBytes(MAX_PHOTO_BYTES + 10).toString('base64')}`;
+    session.handle(a, { type: 'photo', image: tooBig });
+    expect(session.getPhoto(1)).toBeNull();
+    expect(display.display().members[0]!.photoRev).toBe(0);
+  });
+
+  it('selfies follow their owner when seats are renumbered', () => {
+    vi.useFakeTimers();
+    fresh();
+    const [a, b, c] = [addPlayer(), addPlayer(), addPlayer()];
+    session.handle(a, { type: 'photo', image: JPEG });
+    session.handle(c, { type: 'photo', image: `data:image/jpeg;base64,${jpegBytes(900).toString('base64')}` });
+    session.disconnect(b);
+    vi.advanceTimersByTime(30_001);
+    expect(session.getPhoto(1)).toEqual(jpegBytes());
+    expect(session.getPhoto(2)).toEqual(jpegBytes(900));
+    expect(c.player().you.playerId).toBe(2);
+  });
+
+  it('selfies survive restarts and the lobby, but cannot be changed during a match', () => {
+    const [a, b] = [addPlayer(), addPlayer()];
+    session.handle(a, { type: 'photo', image: JPEG });
+    const rev = a.player().you.photoRev;
+    session.handle(display, { type: 'start' });
+    session.handle(b, { type: 'photo', image: JPEG });
+    session.handle(a, { type: 'photo', image: null });
+    expect(display.display().members.map((m) => m.photoRev)).toEqual([rev, 0]);
+
+    session.handle(display, { type: 'restart' });
+    expect(display.display().members[0]!.photoRev).toBe(rev);
+    session.handle(display, { type: 'lobby' });
+    expect(display.display().members[0]!.photoRev).toBe(rev);
+    session.handle(b, { type: 'photo', image: JPEG });
+    expect(display.display().members[1]!.photoRev).toBeGreaterThan(0);
+  });
+
+  it('only players can set selfies, not the display', () => {
+    addPlayer();
+    session.handle(display, { type: 'photo', image: JPEG });
+    expect(session.getPhoto(1)).toBeNull();
+  });
+});
+
 describe('phone support', () => {
   it('gives every new match a new id, so phones can reset per-match settings', () => {
     const [p1] = startWith(2);
@@ -668,6 +786,24 @@ describe('parseClientMessage', () => {
       seed: 5,
       options,
     });
+  });
+
+  it('accepts well-formed photo messages and rejects bad ones', () => {
+    const jpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64')}`;
+    expect(parseClientMessage({ type: 'photo', image: jpeg })).toEqual({ type: 'photo', image: jpeg });
+    expect(parseClientMessage({ type: 'photo', image: null })).toEqual({ type: 'photo', image: null });
+    for (const image of [
+      'data:image/png;base64,AAAA',
+      'data:text/html;base64,PHNjcmlwdD4=',
+      'http://evil.example/x.jpg',
+      'data:image/jpeg;base64,not base64!',
+      `data:image/jpeg;base64,${'A'.repeat(MAX_PHOTO_CHARS)}`,
+      '',
+      42,
+      undefined,
+    ]) {
+      expect(parseClientMessage({ type: 'photo', image })).toBeNull();
+    }
   });
 
   it.each([

@@ -1,4 +1,5 @@
 import type { MemberView } from '../../shared/protocol';
+import { Avatar } from './Avatar';
 
 interface Props {
   members: MemberView[];
@@ -26,7 +27,7 @@ export function PlayerChips({ members, activePlayerId = null, submitted = [] }: 
             title={`${m.name}${m.alive ? '' : ' (eliminated)'}${m.connected ? '' : ' (phone offline)'}`}
             data-testid={`player-${m.playerId}`}
           >
-            <span className="dot small" style={{ background: m.alive ? m.color : '#475569' }} />P{m.playerId}
+            <Avatar member={m} size={18} />P{m.playerId}
             {locked && <span aria-hidden="true"> ✓</span>}
             {!m.connected && <span aria-hidden="true"> ⚠</span>}
           </span>
