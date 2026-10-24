@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, defaultDirection, restartGame } from '../game/gameState';
-import { applyShot, simulateShot } from '../game/simulation';
+import { applyRound, applyShot, simulateShot } from '../game/simulation';
 import { advanceTurn, getActiveSoldierId, markFired, validateShooter } from '../game/turnManager';
 import type { GameState, Obstacle, Soldier } from '../game/types';
 
@@ -191,6 +191,63 @@ describe('turns', () => {
   it('defaults the direction towards the middle of the field', () => {
     expect(defaultDirection(soldier('l', 1, -10, 0))).toBe(1);
     expect(defaultDirection(soldier('r', 2, 10, 0))).toBe(-1);
+  });
+});
+
+describe('simultaneous rounds', () => {
+  const trio = () => makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0), soldier('c', 3, 10, 12)]);
+
+  it('any living soldier may shoot when the turn order is not required', () => {
+    const s = trio();
+    expect(validateShooter(s, 'b')).toMatch(/not Player 2's turn/);
+    expect(validateShooter(s, 'b', false)).toBeNull();
+    expect(validateShooter(markFired(s), 'b', false)).toBeNull();
+    expect(validateShooter(makeState([soldier('a', 1, 0, 0, false), soldier('b', 2, 5, 0)]), 'a', false)).toMatch(/eliminated/);
+    expect(simulateShot(s, 'b', '0', -1, false).ok).toBe(true);
+    expect(simulateShot(s, 'b', '0', -1).ok).toBe(false);
+  });
+
+  it('applies all eliminations together: a player that is hit still shoots', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0), soldier('c', 3, 0, 12)]);
+    const shotA = simulateShot(s, 'a', '0', 1, false);
+    const shotB = simulateShot(s, 'b', '0', -1, false);
+    if (!shotA.ok || !shotB.ok) throw new Error('shots must be valid');
+    expect(shotA.shot.targetId).toBe('b');
+    expect(shotB.shot.targetId).toBe('a');
+
+    const next = applyRound(s, [shotA.shot, shotB.shot]);
+    expect(next.soldiers.map((x) => x.alive)).toEqual([false, false, true]);
+    expect(next.status).toBe('over');
+    expect(next.winnerId).toBe(3);
+  });
+
+  it('continues with a new round while two or more players are left', () => {
+    const s = trio();
+    const miss = simulateShot(s, 'c', '0', 1, false);
+    if (!miss.ok) throw new Error('unexpected');
+    const next = applyRound(s, [miss.shot]);
+    expect(next.status).toBe('playing');
+    expect(next.turn.turnNumber).toBe(2);
+    expect(next.soldiers.every((x) => x.alive)).toBe(true);
+    expect(applyRound(s, []).turn.turnNumber).toBe(2);
+  });
+
+  it('a round in which everybody dies is a draw', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)]);
+    const shotA = simulateShot(s, 'a', '0', 1, false);
+    const shotB = simulateShot(s, 'b', '0', -1, false);
+    if (!shotA.ok || !shotB.ok) throw new Error('shots must be valid');
+    const next = applyRound(s, [shotA.shot, shotB.shot]);
+    expect(next.status).toBe('over');
+    expect(next.winnerId).toBeNull();
+  });
+
+  it('does not mutate the input state', () => {
+    const s = trio();
+    const copy = structuredClone(s);
+    const a = simulateShot(s, 'a', '0', 1, false);
+    if (a.ok) applyRound(s, [a.shot]);
+    expect(s).toEqual(copy);
   });
 });
 

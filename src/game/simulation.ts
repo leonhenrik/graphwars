@@ -2,7 +2,7 @@ import { findFirstCollision, obstacleTarget, soldierTarget, type CircleTarget } 
 import { parseExpression } from './expressionParser';
 import { getSoldier } from './gameState';
 import { computeTrajectory, isUsableTrajectory } from './trajectory';
-import { advanceTurn, validateShooter } from './turnManager';
+import { advanceRound, advanceTurn, validateShooter } from './turnManager';
 import type { GameState, ShotDirection, ShotResult, Trajectory } from './types';
 
 export type ShotAttempt = { ok: true; shot: ShotResult } | { ok: false; error: string };
@@ -46,8 +46,9 @@ export function simulateShot(
   soldierId: string,
   expression: string,
   direction: ShotDirection,
+  requireTurn = true,
 ): ShotAttempt {
-  const shooterError = validateShooter(state, soldierId);
+  const shooterError = validateShooter(state, soldierId, requireTurn);
   if (shooterError) return { ok: false, error: shooterError };
 
   const built = buildTrajectory(state, soldierId, expression, direction);
@@ -100,4 +101,14 @@ export function applyShot(state: GameState, shot: ShotResult): GameState {
       ? state.soldiers.map((s) => (s.id === shot.targetId ? { ...s, alive: false } : s))
       : state.soldiers;
   return advanceTurn({ ...state, soldiers });
+}
+
+/**
+ * Applies all shots of one simultaneous round at once. Every shot was simulated against the same
+ * state, so a player who is hit still gets their own shot off; eliminations happen together.
+ */
+export function applyRound(state: GameState, shots: ShotResult[]): GameState {
+  const hit = new Set(shots.filter((s) => s.outcome === 'hit-soldier').map((s) => s.targetId));
+  const soldiers = state.soldiers.map((s) => (hit.has(s.id) ? { ...s, alive: false } : s));
+  return advanceRound({ ...state, soldiers });
 }

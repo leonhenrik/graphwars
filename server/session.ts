@@ -1,19 +1,21 @@
 import { randomUUID } from 'node:crypto';
-import { MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS } from '../src/game/constants';
+import { DEFAULT_OPTIONS, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS } from '../src/game/constants';
 import { createInitialState, defaultDirection, getPlayerSoldier } from '../src/game/gameState';
 import { describeShot } from '../src/game/messages';
-import { applyShot, buildTrajectory, simulateShot } from '../src/game/simulation';
-import { advanceTurn, getActiveSoldierId, markFired } from '../src/game/turnManager';
-import type { GameState, MapId, PlayerId, ShotDirection, ShotResult } from '../src/game/types';
+import { applyRound, applyShot, buildTrajectory, simulateShot } from '../src/game/simulation';
+import { advanceRound, advanceTurn, markFired } from '../src/game/turnManager';
+import type { GameOptions, GameState, MapId, PlayerId, ShotDirection } from '../src/game/types';
 import type {
   ClientMessage,
   DisplayView,
   DraftView,
+  FiredShot,
   MemberView,
   Notice,
   Phase,
   PlayerView,
   ServerMessage,
+  TimerView,
 } from '../src/shared/protocol';
 
 export interface Client {
@@ -35,31 +37,39 @@ interface Draft {
   direction: ShotDirection;
 }
 
-interface PendingShot {
+interface PendingShots {
   id: number;
-  shot: ShotResult;
-  color: string;
+  shots: FiredShot[];
   timer: ReturnType<typeof setTimeout>;
 }
 
 export interface SessionOptions {
-  /** Safety net: how long to wait for the display to finish animating a shot. */
+  /** Safety net: how long to wait for the display to finish animating the shots. */
   shotTimeoutMs?: number;
 }
 
 /**
  * The authoritative state of one hosted match: lobby, players (one per phone), the game and the
- * shot currently being animated on the laptop. It has no I/O of its own; clients are injected.
+ * shots currently being animated on the laptop. It has no I/O of its own; clients are injected.
+ *
+ * Shot modes:
+ *  - 'turns': one player at a time; the shot is animated, then the next living player is up.
+ *  - 'simultaneous': every living player enters a function in the same round; when all have fired
+ *    (or the countdown ends) all shots are simulated against the same state and animated together.
  */
 export class Session {
   private clients = new Set<Client>();
   private members: Member[] = [];
   private phase: Phase = 'lobby';
   private config: { mapId: MapId; seed: number } = { mapId: 'classic', seed: 1 };
+  private options: GameOptions = { ...DEFAULT_OPTIONS };
   private game: GameState | null = null;
-  private draft: Draft | null = null;
+  private drafts = new Map<PlayerId, Draft>();
+  private submissions = new Map<PlayerId, FiredShot>();
   private notice: Notice | null = null;
-  private pending: PendingShot | null = null;
+  private pending: PendingShots | null = null;
+  private deadline: number | null = null;
+  private countdown: ReturnType<typeof setTimeout> | null = null;
   private nextShotId = 1;
   private readonly shotTimeoutMs: number;
 
@@ -89,8 +99,8 @@ export class Session {
   }
 
   close(): void {
-    if (this.pending) clearTimeout(this.pending.timer);
-    this.pending = null;
+    this.cancelPending();
+    this.stopCountdown();
   }
 
   handle(client: Client, message: ClientMessage): void {
@@ -100,6 +110,10 @@ export class Session {
     }
     if (client.role === 'display') this.handleDisplay(message);
     else if (client.role === 'player') this.handlePlayer(client, message);
+  }
+
+  private get simultaneous(): boolean {
+    return this.options.shotMode === 'simultaneous';
   }
 
   private hello(client: Client, message: Extract<ClientMessage, { type: 'hello' }>): void {
@@ -138,6 +152,7 @@ export class Session {
       case 'configure':
         if (this.phase !== 'lobby') return;
         this.config = { mapId: message.mapId, seed: message.seed };
+        this.options = { ...message.options };
         this.broadcast();
         return;
       case 'start':
@@ -146,32 +161,29 @@ export class Session {
           this.setNotice('error', `Waiting for players: at least ${MIN_PLAYERS} phones must join.`);
           return;
         }
-        this.startMatch();
+        this.startMatchWith({ playerCount: this.members.length, mapId: this.config.mapId, seed: this.config.seed });
         return;
       case 'restart':
         if (this.phase === 'lobby' || !this.game) return;
-        this.cancelPending();
         this.startMatchWith(this.game.config);
         return;
       case 'lobby':
         this.cancelPending();
+        this.stopCountdown();
         this.phase = 'lobby';
         this.game = null;
-        this.draft = null;
+        this.drafts.clear();
+        this.submissions.clear();
         this.notice = null;
         this.members = this.members.filter((m) => m.connected);
         this.renumber();
         this.broadcast();
         return;
       case 'skipTurn':
-        if (this.phase !== 'playing' || !this.game || this.pending) return;
-        this.setNotice('warning', `${this.game.players[this.game.turn.currentPlayerId - 1]?.name ?? 'Player'}'s turn was skipped.`, false);
-        this.game = advanceTurn(this.game);
-        this.draft = null;
-        this.broadcast();
+        this.endWaiting("The host didn't wait any longer.");
         return;
       case 'shotDone':
-        this.resolveShot(message.id);
+        this.resolveShots(message.id);
         return;
       default:
         return;
@@ -180,72 +192,151 @@ export class Session {
 
   private handlePlayer(client: Client, message: ClientMessage): void {
     const member = this.members.find((m) => m.token === client.token);
-    if (!member || !this.game || this.phase !== 'playing' || this.pending) return;
-    if (this.game.turn.currentPlayerId !== member.playerId) return;
+    if (!member || !this.canAct(member)) return;
 
     if (message.type === 'draft') {
-      this.draft = { expression: message.expression, direction: message.direction };
+      this.drafts.set(member.playerId, { expression: message.expression, direction: message.direction });
       this.broadcast();
     } else if (message.type === 'fire') {
       this.fire(member, message.expression, message.direction);
     }
   }
 
+  private canAct(member: Member): boolean {
+    if (!this.game || this.phase !== 'playing' || this.pending) return false;
+    const soldier = getPlayerSoldier(this.game, member.playerId);
+    if (!soldier || !soldier.alive) return false;
+    return this.simultaneous
+      ? !this.submissions.has(member.playerId)
+      : this.game.turn.currentPlayerId === member.playerId;
+  }
+
   private fire(member: Member, expression: string, direction: ShotDirection): void {
-    if (!this.game) return;
-    this.draft = { expression, direction };
-    const soldierId = getActiveSoldierId(this.game);
-    const attempt = soldierId ? simulateShot(this.game, soldierId, expression, direction) : null;
+    const game = this.game;
+    if (!game) return;
+    this.drafts.set(member.playerId, { expression, direction });
+    const soldierId = getPlayerSoldier(game, member.playerId)?.id;
+    const attempt = soldierId ? simulateShot(game, soldierId, expression, direction, !this.simultaneous) : null;
     if (!attempt || !attempt.ok) {
       this.broadcast();
       return;
     }
+    const fired: FiredShot = { playerId: member.playerId, shot: attempt.shot, color: this.colorOf(member.playerId) };
+    this.drafts.delete(member.playerId);
 
-    const color = this.colorOf(member.playerId);
+    if (!this.simultaneous) {
+      this.game = markFired(game);
+      this.setNotice('info', `Player ${member.playerId} fired y = ${expression}`, false);
+      this.launch([fired]);
+      return;
+    }
+
+    this.submissions.set(member.playerId, fired);
+    const living = game.soldiers.filter((s) => s.alive).length;
+    if (this.submissions.size >= living) {
+      this.setNotice('info', 'Everyone has fired!', false);
+      this.launch([...this.submissions.values()]);
+    } else {
+      this.setNotice('info', `${this.submissions.size}/${living} players have fired.`);
+    }
+  }
+
+  /** Sends the shots to the big screen and waits (with a safety timeout) for the animation to finish. */
+  private launch(shots: FiredShot[]): void {
+    this.stopCountdown();
     const id = this.nextShotId++;
-    const timer = setTimeout(() => this.resolveShot(id), this.shotTimeoutMs);
-    this.pending = { id, shot: attempt.shot, color, timer };
-    this.game = markFired(this.game);
-    this.setNotice('info', `Player ${member.playerId} fired y = ${expression}`, false);
-    for (const c of this.clients) if (c.role === 'display') c.send({ type: 'shot', id, shot: attempt.shot, color });
+    const timer = setTimeout(() => this.resolveShots(id), this.shotTimeoutMs);
+    this.pending = { id, shots, timer };
+    for (const c of this.clients) if (c.role === 'display') c.send({ type: 'shots', id, shots });
     this.broadcast();
   }
 
-  private resolveShot(id: number): void {
+  private resolveShots(id: number): void {
     const pending = this.pending;
-    if (!pending || pending.id !== id || !this.game) return;
+    const game = this.game;
+    if (!pending || pending.id !== id || !game) return;
     clearTimeout(pending.timer);
     this.pending = null;
 
-    const summary = describeShot(this.game, pending.shot);
-    const next = applyShot(this.game, pending.shot);
+    const summaries = pending.shots.map((f) => describeShot(game, f.shot));
+    const next = this.simultaneous
+      ? applyRound(game, pending.shots.map((f) => f.shot))
+      : applyShot(game, (pending.shots[0] as FiredShot).shot);
     this.game = next;
-    this.draft = null;
+    this.drafts.clear();
+    this.submissions.clear();
+
+    const kind = summaries.some((s) => s.kind === 'success') ? 'success' : (summaries[0]?.kind ?? 'info');
+    let text = summaries.map((s) => s.text).join(' ');
     if (next.status === 'over') {
       this.phase = 'over';
-      const winner = next.winnerId !== null ? `Player ${next.winnerId}` : 'Nobody';
-      this.setNotice('success', `${summary.text} ${winner} wins!`, false);
+      text += next.winnerId !== null ? ` Player ${next.winnerId} wins!` : ' Everyone was eliminated: draw!';
+      this.stopCountdown();
     } else {
-      this.setNotice(summary.kind, summary.text, false);
+      this.startCountdown();
     }
+    this.setNotice(kind, text, false);
     this.broadcast();
   }
 
-  private startMatch(): void {
-    this.startMatchWith({ playerCount: this.members.length, mapId: this.config.mapId, seed: this.config.seed });
+  /** The turn (or round) ran out of time, or the host stopped waiting: whoever has not fired loses their shot. */
+  private endWaiting(reason: string): void {
+    const game = this.game;
+    if (this.phase !== 'playing' || !game || this.pending) return;
+
+    if (this.simultaneous) {
+      if (this.submissions.size > 0) {
+        this.setNotice('warning', reason, false);
+        this.launch([...this.submissions.values()]);
+        return;
+      }
+      this.setNotice('warning', `${reason} Nobody fired.`, false);
+      this.game = advanceRound(game);
+    } else {
+      this.setNotice('warning', `Player ${game.turn.currentPlayerId}'s turn was skipped. ${reason}`, false);
+      this.game = advanceTurn(game);
+    }
+    this.drafts.clear();
+    this.startCountdown();
+    this.broadcast();
   }
 
   private startMatchWith(config: GameState['config']): void {
+    this.cancelPending();
     this.game = createInitialState(config);
     this.phase = 'playing';
-    this.draft = null;
+    this.drafts.clear();
+    this.submissions.clear();
     this.notice = null;
+    this.startCountdown();
     this.broadcast();
   }
 
   private cancelPending(): void {
     if (this.pending) clearTimeout(this.pending.timer);
     this.pending = null;
+  }
+
+  private startCountdown(): void {
+    this.stopCountdown();
+    if (!this.options.countdownEnabled || this.phase !== 'playing') return;
+    const ms = this.options.countdownSeconds * 1000;
+    this.deadline = Date.now() + ms;
+    this.countdown = setTimeout(() => this.endWaiting("Time's up!"), ms);
+  }
+
+  private stopCountdown(): void {
+    if (this.countdown) clearTimeout(this.countdown);
+    this.countdown = null;
+    this.deadline = null;
+  }
+
+  private timerView(): TimerView | null {
+    if (this.deadline === null || this.pending) return null;
+    return {
+      remainingMs: Math.max(0, this.deadline - Date.now()),
+      totalMs: this.options.countdownSeconds * 1000,
+    };
   }
 
   private renumber(): void {
@@ -272,30 +363,42 @@ export class Session {
     };
   }
 
-  private draftView(): DraftView | null {
-    if (!this.draft || !this.game || this.phase !== 'playing') return null;
-    const soldierId = getActiveSoldierId(this.game);
-    if (!soldierId) return null;
-    const playerId = this.game.turn.currentPlayerId;
-    const built = buildTrajectory(this.game, soldierId, this.draft.expression, this.draft.direction);
-    return {
-      playerId,
-      expression: this.draft.expression,
-      direction: this.draft.direction,
-      points: built.ok ? built.trajectory.points : null,
-      error: built.ok ? null : built.error,
-    };
+  /** Validated drafts of everyone who may currently type (one in turn mode, several when simultaneous). */
+  private draftViews(): DraftView[] {
+    const game = this.game;
+    if (!game || this.phase !== 'playing') return [];
+    const views: DraftView[] = [];
+    for (const [playerId, draft] of this.drafts) {
+      const soldier = getPlayerSoldier(game, playerId);
+      if (!soldier || !soldier.alive) continue;
+      if (this.simultaneous ? this.submissions.has(playerId) : game.turn.currentPlayerId !== playerId) continue;
+      const built = buildTrajectory(game, soldier.id, draft.expression, draft.direction);
+      views.push({
+        playerId,
+        expression: draft.expression,
+        direction: draft.direction,
+        points: built.ok ? built.trajectory.points : null,
+        error: built.ok ? null : built.error,
+      });
+    }
+    return views;
   }
 
   private broadcast(): void {
-    const draft = this.draftView();
+    const drafts = this.draftViews();
+    const timer = this.timerView();
+    // With the preview option off the big screen learns nothing about what is being typed.
+    const publicDrafts = this.options.preview ? drafts : drafts.map((d) => ({ ...d, expression: '', points: null }));
     const display: DisplayView = {
       phase: this.phase,
       mapId: this.config.mapId,
       seed: this.config.seed,
+      options: this.options,
       members: this.members.map((m) => this.memberView(m)),
       game: this.game,
-      draft,
+      drafts: publicDrafts,
+      submitted: [...this.submissions.keys()],
+      timer,
       notice: this.notice,
       shotInFlight: this.pending !== null,
     };
@@ -305,27 +408,33 @@ export class Session {
         client.send({ type: 'display', view: display });
       } else if (client.role === 'player') {
         const member = this.members.find((m) => m.token === client.token);
-        if (member) client.send({ type: 'player', view: this.playerView(member, draft) });
+        if (member) client.send({ type: 'player', view: this.playerView(member, drafts, timer) });
       }
     }
   }
 
-  private playerView(member: Member, draft: DraftView | null): PlayerView {
+  private playerView(member: Member, drafts: DraftView[], timer: TimerView | null): PlayerView {
     const game = this.game;
-    const currentPlayerId = game && this.phase === 'playing' ? game.turn.currentPlayerId : null;
+    const playing = game !== null && this.phase === 'playing';
+    const currentPlayerId = playing && !this.simultaneous ? game.turn.currentPlayerId : null;
     const mine = game ? getPlayerSoldier(game, member.playerId) : undefined;
     return {
       phase: this.phase,
+      options: this.options,
       you: this.memberView(member),
       playerCount: this.members.length,
       currentPlayerId,
       currentPlayerName: currentPlayerId === null ? null : `Player ${currentPlayerId}`,
-      isMyTurn: currentPlayerId === member.playerId && this.pending === null,
+      canAct: this.canAct(member),
+      submitted: this.submissions.has(member.playerId),
+      firedCount: this.submissions.size,
+      livingCount: game ? game.soldiers.filter((s) => s.alive).length : this.members.length,
       turnNumber: game?.turn.turnNumber ?? 0,
       turnDirection: mine ? defaultDirection(mine) : 1,
       shotInFlight: this.pending !== null,
       winnerId: game?.winnerId ?? null,
-      draftError: draft && draft.playerId === member.playerId ? draft.error : null,
+      draftError: drafts.find((d) => d.playerId === member.playerId)?.error ?? null,
+      timer,
       notice: this.notice,
     };
   }

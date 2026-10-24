@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Battlefield, type ShotAnimation } from './components/Battlefield';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { Countdown } from './components/Countdown';
 import { GameOverModal } from './components/GameOverModal';
 import { Lobby } from './components/Lobby';
 import { PlayerChips } from './components/PlayerChips';
-import type { Effect } from './components/render';
+import type { Effect, PathLine } from './components/render';
 import { TurnIndicator } from './components/TurnIndicator';
 import { useSocket } from '../client/useSocket';
-import { defaultDirection, getSoldier } from '../game/gameState';
+import { defaultDirection, getPlayerSoldier, getSoldier } from '../game/gameState';
 import { getActiveSoldierId } from '../game/turnManager';
-import type { MapId } from '../game/types';
+import type { GameOptions, MapId } from '../game/types';
 import type { DisplayView, ServerMessage } from '../shared/protocol';
 
 interface ServerInfo {
@@ -38,8 +39,8 @@ export function DisplayApp() {
         animationRef.current = null;
         setAnimation(null);
       }
-    } else if (message.type === 'shot') {
-      const next = { id: message.id, shot: message.shot, color: message.color };
+    } else if (message.type === 'shots') {
+      const next = { id: message.id, shots: message.shots };
       animationRef.current = next;
       setAnimation(next);
     } else if (message.type === 'rejected') {
@@ -56,30 +57,24 @@ export function DisplayApp() {
       .catch(() => setInfo(null));
   }, []);
 
-  const completeShot = useCallback(
+  const completeShots = useCallback(
     (id: number) => {
       const current = viewRef.current;
       const anim = animationRef.current;
       if (!anim || anim.id !== id) return;
       animationRef.current = null;
-      const shot = anim.shot;
       const now = performance.now();
       const added: Effect[] = [];
-      if (shot.outcome === 'hit-soldier' && current?.game) {
-        const target = getSoldier(current.game, shot.targetId);
-        const color = current.members.find((m) => m.playerId === target?.playerId)?.color ?? '#fff';
-        if (target) {
-          added.push({ id: nextEffectId.current++, kind: 'elimination', x: target.x, y: target.y, color, startedAt: now });
+      for (const { shot, color } of anim.shots) {
+        if (shot.outcome === 'hit-soldier' && current?.game) {
+          const target = getSoldier(current.game, shot.targetId);
+          const targetColor = current.members.find((m) => m.playerId === target?.playerId)?.color ?? '#fff';
+          if (target) {
+            added.push({ id: nextEffectId.current++, kind: 'elimination', x: target.x, y: target.y, color: targetColor, startedAt: now });
+          }
+        } else if (shot.outcome === 'hit-obstacle' && shot.impact) {
+          added.push({ id: nextEffectId.current++, kind: 'impact', x: shot.impact.x, y: shot.impact.y, color, startedAt: now });
         }
-      } else if (shot.outcome === 'hit-obstacle' && shot.impact) {
-        added.push({
-          id: nextEffectId.current++,
-          kind: 'impact',
-          x: shot.impact.x,
-          y: shot.impact.y,
-          color: anim.color,
-          startedAt: now,
-        });
       }
       setEffects((prev) => [...prev.filter((e) => now - e.startedAt < 1000), ...added]);
       setAnimation(null);
@@ -88,11 +83,16 @@ export function DisplayApp() {
     [send],
   );
 
+  const configure = useCallback(
+    (mapId: MapId, seed: number, options: GameOptions) => send({ type: 'configure', mapId, seed, options }),
+    [send],
+  );
+
   if (!view) {
     return (
-      <div className="menu">
-        <div className="menu-card">
-          <h1>Graphwars</h1>
+      <div className="lobby-page">
+        <div className="lobby-card">
+          <h1 className="brand">Graphwars</h1>
           <p className="menu-sub">{rejected ?? (connected ? 'Loading…' : 'Connecting to the game server…')}</p>
         </div>
       </div>
@@ -106,8 +106,9 @@ export function DisplayApp() {
         members={view.members}
         mapId={view.mapId}
         seed={view.seed}
+        options={view.options}
         joinUrls={urls}
-        onConfigure={(mapId: MapId, seed: number) => send({ type: 'configure', mapId, seed })}
+        onConfigure={configure}
         onStart={() => send({ type: 'start' })}
         notice={view.notice?.kind === 'error' ? view.notice.text : null}
       />
@@ -116,22 +117,41 @@ export function DisplayApp() {
 
   const game = view.game;
   const over = game.status === 'over';
-  const activeId = over ? null : getActiveSoldierId(game);
-  const activeSoldier = getSoldier(game, activeId);
-  const direction = view.draft?.direction ?? (activeSoldier ? defaultDirection(activeSoldier) : 1);
+  const simultaneous = view.options.shotMode === 'simultaneous';
   const current = view.members.find((m) => m.playerId === game.turn.currentPlayerId);
-  const draft = view.draft;
+  const colorOf = (playerId: number) => view.members.find((m) => m.playerId === playerId)?.color ?? '#fff';
+
+  // Turn mode: the axes follow the active player. Simultaneous mode: plain world axes.
+  const originId = over || simultaneous ? null : getActiveSoldierId(game);
+  const originSoldier = getSoldier(game, originId);
+  const activeDraft = view.drafts.find((d) => d.playerId === game.turn.currentPlayerId);
+  const direction = activeDraft?.direction ?? (originSoldier ? defaultDirection(originSoldier) : 1);
+
+  const waitingIds = over
+    ? []
+    : simultaneous
+      ? game.soldiers.filter((s) => s.alive && !view.submitted.includes(s.playerId)).map((s) => s.id)
+      : originId
+        ? [originId]
+        : [];
+  const lockedIds = simultaneous ? view.submitted.flatMap((id) => getPlayerSoldier(game, id)?.id ?? []) : [];
+  const previews: PathLine[] = view.drafts.flatMap((d) => (d.points ? [{ points: d.points, color: colorOf(d.playerId) }] : []));
+
+  const someoneOffline = simultaneous
+    ? view.members.some((m) => m.alive && !m.connected && !view.submitted.includes(m.playerId))
+    : current !== undefined && !current.connected;
 
   return (
     <div className="app display">
       <header className="header">
-        <h1>Graphwars</h1>
-        <TurnIndicator game={game} busy={view.shotInFlight} />
+        <h1 className="brand small">Graphwars</h1>
+        <TurnIndicator game={game} options={view.options} busy={view.shotInFlight} firedCount={view.submitted.length} />
+        <Countdown timer={view.timer} />
         <div className="header-actions">
           {!connected && <span className="status">Reconnecting…</span>}
-          {!over && current && !current.connected && !view.shotInFlight && (
+          {!over && someoneOffline && !view.shotInFlight && (
             <button className="btn" onClick={() => send({ type: 'skipTurn' })}>
-              Skip {current.name}
+              {simultaneous ? 'Fire now' : `Skip ${current?.name ?? 'turn'}`}
             </button>
           )}
           <button className="btn" onClick={() => setConfirm('lobby')}>
@@ -147,26 +167,46 @@ export function DisplayApp() {
         <div className="field-area">
           <Battlefield
             state={game}
-            activeId={activeId}
+            originId={originId}
+            activeIds={waitingIds}
+            lockedIds={lockedIds}
             direction={direction}
-            preview={draft?.points ?? null}
+            previews={view.options.preview ? previews : []}
             animation={animation}
             effects={effects}
-            onAnimationComplete={completeShot}
+            onAnimationComplete={completeShots}
           />
         </div>
       </main>
 
       <footer className="statusbar">
-        <PlayerChips members={view.members} game={game} />
+        <PlayerChips
+          members={view.members}
+          activePlayerId={!over && !simultaneous ? game.turn.currentPlayerId : null}
+          submitted={view.submitted}
+        />
         <div className="draft" data-testid="draft">
           {over ? null : view.shotInFlight ? (
-            <span>Shot in flight…</span>
-          ) : draft ? (
+            <span>{simultaneous ? 'Shots in flight…' : 'Shot in flight…'}</span>
+          ) : simultaneous ? (
+            <span>
+              Everyone is typing… <strong>{view.submitted.length}</strong>/{game.soldiers.filter((s) => s.alive).length} locked in
+              {view.drafts.map((d) => d.error && (
+                <span key={d.playerId} className="draft-error"> · {view.members.find((m) => m.playerId === d.playerId)?.name}: {d.error}</span>
+              ))}
+            </span>
+          ) : activeDraft ? (
             <>
-              <strong style={{ color: current?.color }}>{current?.name}</strong> y = <code>{draft.expression || '…'}</code>{' '}
-              <span className="draft-dir">{draft.direction === 1 ? 'x →' : '← x'}</span>
-              {draft.error && <span className="draft-error"> {draft.error}</span>}
+              <strong style={{ color: current?.color }}>{current?.name}</strong>{' '}
+              {view.options.preview ? (
+                <>
+                  y = <code>{activeDraft.expression || '…'}</code>{' '}
+                  <span className="draft-dir">{activeDraft.direction === 1 ? 'x →' : '← x'}</span>
+                </>
+              ) : (
+                <span>is typing…</span>
+              )}
+              {activeDraft.error && <span className="draft-error"> {activeDraft.error}</span>}
             </>
           ) : current && !current.connected ? (
             <span className="draft-error">{current.name}'s phone is offline.</span>

@@ -11,14 +11,23 @@ export interface Effect {
 
 export const EFFECT_DURATION_MS = 900;
 
+export interface PathLine {
+  points: TrajectoryPoint[];
+  color: string;
+}
+
 export interface Scene {
   state: GameState;
-  /** The active player's soldier: the origin (0,0) of the function coordinate system. */
-  activeId: string | null;
+  /** The soldier whose position is the origin (0,0) of the axes, or null for plain world axes. */
+  originId: string | null;
+  /** Soldiers that currently have to act (pulsing ring). */
+  activeIds: string[];
+  /** Soldiers that already fired this round (simultaneous mode); shown with a check mark. */
+  lockedIds: string[];
   direction: ShotDirection;
-  preview: TrajectoryPoint[] | null;
-  /** The shot being animated, already trimmed to the portion revealed so far. */
-  shot: { points: TrajectoryPoint[]; color: string } | null;
+  previews: PathLine[];
+  /** Shots being animated, already trimmed to the portion revealed so far. */
+  shots: PathLine[];
   effects: Effect[];
   now: number;
 }
@@ -75,7 +84,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   const px = (x: number) => (x - bounds.minX) * scale;
   const py = (y: number) => (bounds.maxY - y) * scale;
 
-  const active = scene.state.soldiers.find((s) => s.id === scene.activeId);
+  const active = scene.state.soldiers.find((s) => s.id === scene.originId);
   const ox = active ? active.x : 0;
   const oy = active ? active.y : 0;
   const dir = scene.direction;
@@ -170,24 +179,26 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     ctx.stroke();
   }
 
-  // Preview trajectory
-  if (scene.preview && scene.preview.length > 1) {
+  // Preview trajectories
+  for (const preview of scene.previews) {
+    if (preview.points.length < 2) continue;
     ctx.save();
-    ctx.strokeStyle = axisColor;
+    ctx.strokeStyle = preview.color;
     ctx.globalAlpha = 0.7;
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 6]);
-    strokePath(ctx, scene.preview, px, py);
+    strokePath(ctx, preview.points, px, py);
     ctx.restore();
   }
 
-  // Animated shot
-  if (scene.shot && scene.shot.points.length > 0) {
-    const pts = scene.shot.points;
+  // Animated shots
+  for (const shot of scene.shots) {
+    if (shot.points.length === 0) continue;
+    const pts = shot.points;
     ctx.save();
-    ctx.shadowColor = scene.shot.color;
+    ctx.shadowColor = shot.color;
     ctx.shadowBlur = 12;
-    ctx.strokeStyle = scene.shot.color;
+    ctx.strokeStyle = shot.color;
     ctx.lineWidth = 3.5;
     ctx.lineJoin = 'round';
     strokePath(ctx, pts, px, py);
@@ -216,7 +227,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       ctx.stroke();
       continue;
     }
-    if (s.id === scene.activeId) {
+    if (scene.activeIds.includes(s.id)) {
       const pulse = 0.5 + 0.5 * Math.sin(scene.now / 220);
       ctx.strokeStyle = '#fde047';
       ctx.globalAlpha = 0.6 + 0.4 * pulse;
@@ -225,7 +236,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       ctx.arc(cx, cy, r + 5 + pulse * 2, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
-
+    }
+    if (s.id === scene.originId) {
       // Direction arrow
       const ax = cx + dir * (r + 12);
       ctx.fillStyle = '#fde047';
@@ -235,6 +247,13 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       ctx.lineTo(ax, cy + 6);
       ctx.closePath();
       ctx.fill();
+    }
+    if (scene.lockedIds.includes(s.id)) {
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
+      ctx.stroke();
     }
     ctx.fillStyle = color;
     ctx.strokeStyle = '#0b1220';

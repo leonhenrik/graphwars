@@ -61,25 +61,59 @@ describe('server over real WebSockets', () => {
 
     await big.until(big.lastDisplay((v) => v.members.length === 2));
     big.send({ type: 'start' });
-    await phone1.until(phone1.lastPlayer((v) => v.phase === 'playing' && v.isMyTurn));
+    await phone1.until(phone1.lastPlayer((v) => v.phase === 'playing' && v.canAct));
 
     // Garbage and oversized frames are ignored without killing the server.
     phone1.socket.send('not json');
     phone1.socket.send(JSON.stringify({ type: 'fire', expression: 5 }));
 
     phone1.send({ type: 'draft', expression: 'sin(x)', direction: 1 });
-    const draft = await big.until(big.lastDisplay((v) => v.draft?.expression === 'sin(x)'));
-    expect(draft.draft!.points!.length).toBeGreaterThan(10);
+    const draft = await big.until(big.lastDisplay((v) => v.drafts[0]?.expression === 'sin(x)'));
+    expect(draft.drafts[0]!.points!.length).toBeGreaterThan(10);
 
     phone1.send({ type: 'fire', expression: '0.012*x*(42-x)', direction: 1 });
-    const shot = await big.until(() => big.messages.find((m) => m.type === 'shot'));
-    if (shot.type !== 'shot') throw new Error('unreachable');
-    expect(shot.shot.targetId).toBe('p2');
-    big.send({ type: 'shotDone', id: shot.id });
+    const msg = await big.until(() => big.messages.find((m) => m.type === 'shots'));
+    if (msg.type !== 'shots') throw new Error('unreachable');
+    expect(msg.shots[0]!.shot.targetId).toBe('p2');
+    big.send({ type: 'shotDone', id: msg.id });
 
     const over = await phone2.until(phone2.lastPlayer((v) => v.phase === 'over'));
     expect(over.winnerId).toBe(1);
     expect(over.you.alive).toBe(false);
+
+    for (const p of [big, phone1, phone2]) p.socket.close();
+  });
+
+  it('runs a simultaneous round with a countdown over real sockets', async () => {
+    app = await startApp({ port: 0, host: '127.0.0.1' });
+    const big = await Peer.connect(app.port);
+    big.send({ type: 'hello', role: 'display' });
+    const phone1 = await Peer.connect(app.port);
+    phone1.send({ type: 'hello', role: 'player', token: null });
+    const phone2 = await Peer.connect(app.port);
+    phone2.send({ type: 'hello', role: 'player', token: null });
+    await big.until(big.lastDisplay((v) => v.members.length === 2));
+
+    big.send({
+      type: 'configure',
+      mapId: 'classic',
+      seed: 1,
+      options: { shotMode: 'simultaneous', preview: false, countdownEnabled: true, countdownSeconds: 30 },
+    });
+    await big.until(big.lastDisplay((v) => v.options.shotMode === 'simultaneous'));
+    big.send({ type: 'start' });
+
+    const p1 = await phone1.until(phone1.lastPlayer((v) => v.phase === 'playing' && v.canAct));
+    await phone2.until(phone2.lastPlayer((v) => v.phase === 'playing' && v.canAct));
+    expect(p1.timer!.totalMs).toBe(30_000);
+
+    phone1.send({ type: 'fire', expression: '0', direction: 1 });
+    phone2.send({ type: 'fire', expression: '0', direction: -1 });
+    const msg = await big.until(() => big.messages.find((m) => m.type === 'shots'));
+    if (msg.type !== 'shots') throw new Error('unreachable');
+    expect(msg.shots.map((s) => s.playerId)).toEqual([1, 2]);
+    big.send({ type: 'shotDone', id: msg.id });
+    await phone1.until(phone1.lastPlayer((v) => v.turnNumber === 2 && v.canAct));
 
     for (const p of [big, phone1, phone2]) p.socket.close();
   });

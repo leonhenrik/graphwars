@@ -1,4 +1,14 @@
-import type { GameState, MapId, PlayerId, ShotDirection, ShotResult, TrajectoryPoint } from '../game/types';
+import { COUNTDOWN_MAX_SECONDS, COUNTDOWN_MIN_SECONDS } from '../game/constants';
+import type {
+  GameOptions,
+  GameState,
+  MapId,
+  PlayerId,
+  ShotDirection,
+  ShotMode,
+  ShotResult,
+  TrajectoryPoint,
+} from '../game/types';
 
 /** Messages exchanged over the WebSocket between the laptop (display), the phones (players) and the server. */
 
@@ -18,46 +28,70 @@ export interface MemberView {
   alive: boolean;
 }
 
-/** What the active player's phone is currently typing, validated and previewed by the server. */
+/** What a phone is currently typing, validated (and, if the preview option is on, previewed) by the server. */
 export interface DraftView {
   playerId: PlayerId;
+  /** Empty when the preview option is off, so the big screen does not reveal the function. */
   expression: string;
   direction: ShotDirection;
   points: TrajectoryPoint[] | null;
   error: string | null;
 }
 
+/** Time left, measured on the server when the view was sent; clients count down from their receive time. */
+export interface TimerView {
+  remainingMs: number;
+  totalMs: number;
+}
+
+export interface FiredShot {
+  playerId: PlayerId;
+  shot: ShotResult;
+  color: string;
+}
+
 export interface DisplayView {
   phase: Phase;
   mapId: MapId;
   seed: number;
+  options: GameOptions;
   members: MemberView[];
   game: GameState | null;
-  draft: DraftView | null;
+  drafts: DraftView[];
+  /** Simultaneous mode: players who already locked in their shot this round. */
+  submitted: PlayerId[];
+  timer: TimerView | null;
   notice: Notice | null;
   shotInFlight: boolean;
 }
 
 export interface PlayerView {
   phase: Phase;
+  options: GameOptions;
   you: MemberView;
   playerCount: number;
   currentPlayerId: PlayerId | null;
   currentPlayerName: string | null;
-  isMyTurn: boolean;
+  /** True when this phone may type and fire right now. */
+  canAct: boolean;
+  /** Simultaneous mode: this phone already fired in the current round. */
+  submitted: boolean;
+  firedCount: number;
+  livingCount: number;
   turnNumber: number;
   /** Direction the phone should start the turn with (towards the middle of the field). */
   turnDirection: ShotDirection;
   shotInFlight: boolean;
   winnerId: PlayerId | null;
   draftError: string | null;
+  timer: TimerView | null;
   notice: Notice | null;
 }
 
 export type ClientMessage =
   | { type: 'hello'; role: 'display' }
   | { type: 'hello'; role: 'player'; token: string | null }
-  | { type: 'configure'; mapId: MapId; seed: number }
+  | { type: 'configure'; mapId: MapId; seed: number; options: GameOptions }
   | { type: 'start' }
   | { type: 'restart' }
   | { type: 'lobby' }
@@ -70,12 +104,35 @@ export type ServerMessage =
   | { type: 'welcome'; token: string }
   | { type: 'display'; view: DisplayView }
   | { type: 'player'; view: PlayerView }
-  | { type: 'shot'; id: number; shot: ShotResult; color: string }
+  | { type: 'shots'; id: number; shots: FiredShot[] }
   | { type: 'rejected'; text: string };
 
 export const MAX_MESSAGE_EXPRESSION = 500;
 
 const MAP_IDS: MapId[] = ['classic', 'pillars', 'scatter'];
+const SHOT_MODES: ShotMode[] = ['turns', 'simultaneous'];
+
+function parseOptions(raw: unknown): GameOptions | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  if (
+    !SHOT_MODES.includes(o.shotMode as ShotMode) ||
+    typeof o.preview !== 'boolean' ||
+    typeof o.countdownEnabled !== 'boolean' ||
+    typeof o.countdownSeconds !== 'number' ||
+    !Number.isInteger(o.countdownSeconds) ||
+    o.countdownSeconds < COUNTDOWN_MIN_SECONDS ||
+    o.countdownSeconds > COUNTDOWN_MAX_SECONDS
+  ) {
+    return null;
+  }
+  return {
+    shotMode: o.shotMode as ShotMode,
+    preview: o.preview,
+    countdownEnabled: o.countdownEnabled,
+    countdownSeconds: o.countdownSeconds,
+  };
+}
 
 /** Runtime validation of untrusted JSON from the network. Returns null for anything malformed. */
 export function parseClientMessage(raw: unknown): ClientMessage | null {
@@ -91,11 +148,13 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         return { type: 'hello', role: 'player', token: m.token };
       }
       return null;
-    case 'configure':
-      if (MAP_IDS.includes(m.mapId as MapId) && typeof m.seed === 'number' && Number.isSafeInteger(m.seed)) {
-        return { type: 'configure', mapId: m.mapId as MapId, seed: m.seed };
+    case 'configure': {
+      const options = parseOptions(m.options);
+      if (options && MAP_IDS.includes(m.mapId as MapId) && typeof m.seed === 'number' && Number.isSafeInteger(m.seed)) {
+        return { type: 'configure', mapId: m.mapId as MapId, seed: m.seed, options };
       }
       return null;
+    }
     case 'start':
     case 'restart':
     case 'lobby':

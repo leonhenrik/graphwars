@@ -57,6 +57,17 @@ export interface TurnState {
 
 export type MatchStatus = 'playing' | 'over';
 
+/** 'turns': one player at a time. 'simultaneous': everybody enters a function, all shots resolve together. */
+export type ShotMode = 'turns' | 'simultaneous';
+
+export interface GameOptions {
+  shotMode: ShotMode;
+  /** Show the entered curve on the big screen while a player types. */
+  preview: boolean;
+  countdownEnabled: boolean;
+  countdownSeconds: number;
+}
+
 export interface GameState {
   config: MatchConfig;
   players: Player[];
