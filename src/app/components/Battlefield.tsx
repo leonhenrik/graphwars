@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { GameState, ShotDirection } from '../../game/types';
 import type { FiredShot } from '../../shared/protocol';
-import { drawScene, partialPath, pathLength, viewBoundsOf, EFFECT_DURATION_MS, type Effect, type PathLine } from './render';
+import { drawScene, partialPath, pathLength, EFFECT_DURATION_MS, type Effect, type PathLine } from './render';
 
 /** One or more shots that are animated together (several when players fire simultaneously). */
 export interface ShotAnimation {
@@ -44,8 +44,8 @@ export function Battlefield({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
-  const view = viewBoundsOf(state.battlefield.bounds);
-  const aspect = (view.maxX - view.minX) / (view.maxY - view.minY);
+  const { bounds } = state.battlefield;
+  const aspect = (bounds.maxX - bounds.minX) / (bounds.maxY - bounds.minY);
 
   useLayoutEffect(() => {
     const wrap = wrapRef.current;
@@ -86,10 +86,7 @@ export function Battlefield({
       start: performance.now(),
       shots: animation.shots.map((shot) => ({
         shot,
-        durationMs: Math.min(
-          MAX_SHOT_MS,
-          Math.max(MIN_SHOT_MS, (pathLength(shot.shot.extendedPoints) / UNITS_PER_SECOND) * 1000),
-        ),
+        durationMs: Math.min(MAX_SHOT_MS, Math.max(MIN_SHOT_MS, (pathLength(shot.shot.points) / UNITS_PER_SECOND) * 1000)),
       })),
       done: false,
     };
@@ -118,7 +115,7 @@ export function Battlefield({
         shotLines = anim.shots.map(({ shot, durationMs }) => {
           const fraction = Math.min(1, (now - anim.start) / durationMs);
           if (fraction < 1) allDone = false;
-          return { points: partialPath(shot.shot.extendedPoints, fraction), color: shot.color };
+          return { points: partialPath(shot.shot.points, fraction), color: shot.color };
         });
         if (allDone) {
           anim.done = true;

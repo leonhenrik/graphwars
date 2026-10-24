@@ -102,11 +102,6 @@ export interface ShotResult {
   direction: ShotDirection;
   /** Path actually travelled, ending at the impact point (or the end of the trajectory for misses). */
   points: TrajectoryPoint[];
-  /**
-   * What to draw: equal to `points` for hits; for misses the curve continues beyond the battlefield border
-   * (display only, so players can see where their function goes). Never used for collisions.
-   */
-  extendedPoints: TrajectoryPoint[];
   outcome: ShotOutcome;
   targetId: string | null;
   impact: TrajectoryPoint | null;

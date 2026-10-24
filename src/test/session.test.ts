@@ -641,23 +641,14 @@ describe('phone support', () => {
     expect(display.display().drafts[0]).toMatchObject({ playerId: 1, direction: -1 });
   });
 
-  it('previews continue beyond the battlefield border so players see where the curve goes', () => {
+  it('previews stop at the battlefield border', () => {
     const [p1] = startWith(2, { preview: true });
     session.handle(p1, { type: 'draft', expression: '0', direction: 1 });
     const points = display.display().drafts[0]!.points!;
-    const game = display.display().game!;
-    expect(points[points.length - 1]!.x).toBeGreaterThan(game.battlefield.bounds.maxX + 5);
-    expect(points[points.length - 1]!.x).toBeLessThanOrEqual(game.battlefield.bounds.maxX + 7.5 + 1e-9);
+    const { bounds } = display.display().game!.battlefield;
+    expect(points[points.length - 1]!.x).toBeCloseTo(bounds.maxX, 6);
+    expect(points.every((p) => p.x <= bounds.maxX + 1e-9 && Math.abs(p.y) <= bounds.maxY)).toBe(true);
     expect(p1.player().draftError).toBeNull();
-  });
-
-  it('fired misses carry the extended path for the display', () => {
-    const [p1] = startWith(2);
-    session.handle(p1, { type: 'fire', expression: '0', direction: -1 }); // towards the left wall: a miss
-    const { shot } = lastShots().shots[0]!;
-    expect(shot.outcome).toBe('miss');
-    expect(shot.extendedPoints.length).toBeGreaterThan(shot.points.length);
-    expect(shot.extendedPoints[shot.extendedPoints.length - 1]!.x).toBeLessThan(-25 - 5);
   });
 });
 

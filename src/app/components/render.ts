@@ -1,5 +1,4 @@
-import { extendBounds } from '../../game/trajectory';
-import type { Bounds, GameState, ShotDirection, TrajectoryPoint } from '../../game/types';
+import type { GameState, ShotDirection, TrajectoryPoint } from '../../game/types';
 
 export interface Effect {
   id: number;
@@ -38,11 +37,6 @@ export interface Scene {
 export interface View {
   width: number;
   height: number;
-}
-
-/** The area that is drawn: the battlefield plus a greyed-out margin where curves can still be seen. */
-export function viewBoundsOf(field: Bounds): Bounds {
-  return extendBounds(field);
 }
 
 /** Returns the first `fraction` (0..1) of the polyline by arc length. */
@@ -94,20 +88,11 @@ interface StrokeStyle {
   glow?: number;
 }
 
-const OUTSIDE_COLOR = '#94a3b8';
-
 export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scene): void {
-  const field = scene.state.battlefield.bounds;
-  const vb = viewBoundsOf(field);
+  const vb = scene.state.battlefield.bounds;
   const scale = view.width / (vb.maxX - vb.minX);
   const px = (x: number) => (x - vb.minX) * scale;
   const py = (y: number) => (vb.maxY - y) * scale;
-
-  // The battlefield rectangle in canvas pixels; everything outside it is the greyed-out margin.
-  const fx = px(field.minX);
-  const fy = py(field.maxY);
-  const fw = (field.maxX - field.minX) * scale;
-  const fh = (field.maxY - field.minY) * scale;
 
   const origin = scene.state.soldiers.find((s) => s.id === scene.originId);
   const ox = origin ? origin.x : 0;
@@ -119,13 +104,11 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   ctx.save();
   ctx.clearRect(0, 0, view.width, view.height);
 
-  ctx.fillStyle = '#0a1020';
-  ctx.fillRect(0, 0, view.width, view.height);
-  const bg = ctx.createLinearGradient(0, fy, 0, fy + fh);
+  const bg = ctx.createLinearGradient(0, 0, 0, view.height);
   bg.addColorStop(0, '#0f172a');
   bg.addColorStop(1, '#13203a');
   ctx.fillStyle = bg;
-  ctx.fillRect(fx, fy, fw, fh);
+  ctx.fillRect(0, 0, view.width, view.height);
 
   // Grid, aligned to integer steps of the local coordinate system.
   const maxU = Math.ceil(vb.maxX - vb.minX);
@@ -206,73 +189,37 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     ctx.stroke();
   }
 
-  // Grey veil over everything outside the battlefield, with a dashed border marking the edge.
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, view.width, view.height);
-  ctx.rect(fx, fy, fw, fh);
-  ctx.fillStyle = 'rgba(8, 12, 22, 0.66)';
-  ctx.fill('evenodd');
-  ctx.restore();
-  ctx.save();
-  ctx.strokeStyle = 'rgba(148,163,184,0.55)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([8, 6]);
-  ctx.strokeRect(fx, fy, fw, fh);
-  ctx.restore();
-
-  const drawSplit = (points: TrajectoryPoint[], inside: StrokeStyle, outside: StrokeStyle) => {
+  const drawLine = (points: TrajectoryPoint[], style: StrokeStyle) => {
     if (points.length < 2) return;
-    const pass = (style: StrokeStyle, clipOutside: boolean) => {
-      ctx.save();
-      ctx.beginPath();
-      if (clipOutside) ctx.rect(0, 0, view.width, view.height);
-      ctx.rect(fx, fy, fw, fh);
-      ctx.clip(clipOutside ? 'evenodd' : 'nonzero');
-      ctx.strokeStyle = style.color;
-      ctx.globalAlpha = style.alpha;
-      ctx.lineWidth = style.width;
-      ctx.lineJoin = 'round';
-      ctx.setLineDash(style.dash ?? []);
-      ctx.shadowColor = style.color;
-      ctx.shadowBlur = style.glow ?? 0;
-      strokePath(ctx, points, px, py);
-      ctx.restore();
-    };
-    pass(inside, false);
-    pass(outside, true);
+    ctx.save();
+    ctx.strokeStyle = style.color;
+    ctx.globalAlpha = style.alpha;
+    ctx.lineWidth = style.width;
+    ctx.lineJoin = 'round';
+    ctx.setLineDash(style.dash ?? []);
+    ctx.shadowColor = style.color;
+    ctx.shadowBlur = style.glow ?? 0;
+    strokePath(ctx, points, px, py);
+    ctx.restore();
   };
 
   // Faint dashed trace of the previous shot(s)
   for (const trace of scene.traces) {
-    drawSplit(
-      trace.points,
-      { color: trace.color, alpha: 0.38, width: 2, dash: [3, 7] },
-      { color: OUTSIDE_COLOR, alpha: 0.22, width: 2, dash: [3, 7] },
-    );
+    drawLine(trace.points, { color: trace.color, alpha: 0.38, width: 2, dash: [3, 7] });
   }
 
   // Preview trajectories
   for (const preview of scene.previews) {
-    drawSplit(
-      preview.points,
-      { color: preview.color, alpha: 0.75, width: 2, dash: [6, 6] },
-      { color: OUTSIDE_COLOR, alpha: 0.65, width: 2, dash: [6, 6] },
-    );
+    drawLine(preview.points, { color: preview.color, alpha: 0.75, width: 2, dash: [6, 6] });
   }
 
   // Animated shots
   for (const shot of scene.shots) {
     if (shot.points.length === 0) continue;
-    drawSplit(
-      shot.points,
-      { color: shot.color, alpha: 1, width: 3.5, glow: 12 },
-      { color: OUTSIDE_COLOR, alpha: 0.75, width: 3 },
-    );
+    drawLine(shot.points, { color: shot.color, alpha: 1, width: 3.5, glow: 12 });
     const head = shot.points[shot.points.length - 1] as TrajectoryPoint;
-    const inField = head.x >= field.minX && head.x <= field.maxX && head.y >= field.minY && head.y <= field.maxY;
     ctx.save();
-    ctx.fillStyle = inField ? '#fff' : OUTSIDE_COLOR;
+    ctx.fillStyle = '#fff';
     ctx.beginPath();
     ctx.arc(px(head.x), py(head.y), 5, 0, Math.PI * 2);
     ctx.fill();

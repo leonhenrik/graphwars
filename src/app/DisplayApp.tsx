@@ -80,7 +80,7 @@ export function DisplayApp() {
         }
       }
       setEffects((prev) => [...prev.filter((e) => now - e.startedAt < 1000), ...added]);
-      setTraces(anim.shots.map(({ shot, color }) => ({ points: shot.extendedPoints, color })));
+      setTraces(anim.shots.map(({ shot, color }) => ({ points: shot.points, color })));
       setAnimation(null);
       send({ type: 'shotDone', id });
     },

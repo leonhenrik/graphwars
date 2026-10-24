@@ -3,7 +3,6 @@ import { DEFAULT_OPTIONS, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS } from '../src
 import { createInitialState, defaultDirection, getPlayerSoldier } from '../src/game/gameState';
 import { describeShot } from '../src/game/messages';
 import { applyRound, applyShot, buildTrajectory, simulateShot } from '../src/game/simulation';
-import { extendBounds } from '../src/game/trajectory';
 import { advanceRound, advanceTurn, markFired } from '../src/game/turnManager';
 import type { GameOptions, GameState, MapId, PlayerId, ShotDirection } from '../src/game/types';
 import type {
@@ -414,15 +413,11 @@ export class Session {
       if (!soldier || !soldier.alive) continue;
       if (this.simultaneous ? this.submissions.has(playerId) : game.turn.currentPlayerId !== playerId) continue;
       const built = buildTrajectory(game, soldier.id, draft.expression, draft.direction);
-      // The preview also shows where the curve goes beyond the battlefield border (greyed out on screen).
-      const extended = built.ok
-        ? buildTrajectory(game, soldier.id, draft.expression, draft.direction, extendBounds(game.battlefield.bounds))
-        : built;
       views.push({
         playerId,
         expression: draft.expression,
         direction: draft.direction,
-        points: extended.ok ? extended.trajectory.points : null,
+        points: built.ok ? built.trajectory.points : null,
         error: built.ok ? null : built.error,
       });
     }
