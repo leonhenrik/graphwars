@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { DEFAULT_OPTIONS, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS } from '../src/game/constants';
 import { createInitialState, defaultDirection, getPlayerSoldier } from '../src/game/gameState';
 import { describeShot } from '../src/game/messages';
-import { applyRound, applyShot, buildTrajectory, simulateShot } from '../src/game/simulation';
+import { applyRound, applyShot, buildTrajectory, roundEliminations, simulateShot } from '../src/game/simulation';
 import { advanceRound, advanceTurn, markFired } from '../src/game/turnManager';
 import type { GameOptions, GameState, MapId, PlayerId, ShotDirection } from '../src/game/types';
 import type {
@@ -344,7 +344,8 @@ export class Session {
     clearTimeout(pending.timer);
     this.pending = null;
 
-    const summaries = pending.shots.map((f) => describeShot(game, f.shot));
+    const eliminated = this.simultaneous ? roundEliminations(pending.shots.map((f) => f.shot)) : undefined;
+    const summaries = pending.shots.map((f) => describeShot(game, f.shot, eliminated));
     const next = this.simultaneous
       ? applyRound(game, pending.shots.map((f) => f.shot))
       : applyShot(game, (pending.shots[0] as FiredShot).shot);

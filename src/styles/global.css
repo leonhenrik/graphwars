@@ -490,6 +490,11 @@ body {
   color: #fca5a5;
 }
 
+.tool-row .btn.cursor {
+  flex: 0 0 44px;
+  padding: 11px 0;
+}
+
 /* ---- Lobby (laptop menu) ---- */
 .lobby-page {
   min-height: 100%;

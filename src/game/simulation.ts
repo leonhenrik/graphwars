@@ -103,12 +103,39 @@ export function applyShot(state: GameState, shot: ShotResult): GameState {
   return advanceTurn({ ...state, soldiers });
 }
 
+export function pathLength(points: ShotResult['points']): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1] as { x: number; y: number };
+    const b = points[i] as { x: number; y: number };
+    total += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return total;
+}
+
+/**
+ * Ids of the soldiers eliminated by a simultaneous round. When two players hit each other, the one
+ * whose function is shorter (up to the point of impact) wins the duel and survives; equal lengths
+ * eliminate both.
+ */
+export function roundEliminations(shots: ShotResult[]): Set<string> {
+  const hits = shots.filter((s) => s.outcome === 'hit-soldier' && s.targetId !== null);
+  const eliminated = new Set<string>();
+  for (const shot of hits) {
+    const target = shot.targetId as string;
+    const reply = hits.find((other) => other.shooterId === target && other.targetId === shot.shooterId);
+    if (reply && pathLength(reply.points) < pathLength(shot.points)) continue;
+    eliminated.add(target);
+  }
+  return eliminated;
+}
+
 /**
  * Applies all shots of one simultaneous round at once. Every shot was simulated against the same
  * state, so a player who is hit still gets their own shot off; eliminations happen together.
  */
 export function applyRound(state: GameState, shots: ShotResult[]): GameState {
-  const hit = new Set(shots.filter((s) => s.outcome === 'hit-soldier').map((s) => s.targetId));
+  const hit = roundEliminations(shots);
   const soldiers = state.soldiers.map((s) => (hit.has(s.id) ? { ...s, alive: false } : s));
   return advanceRound({ ...state, soldiers });
 }

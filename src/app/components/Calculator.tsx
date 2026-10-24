@@ -64,6 +64,18 @@ export function Calculator({
     return { start: el?.selectionStart ?? value.length, end: el?.selectionEnd ?? value.length };
   };
 
+  const moveCaret = (delta: -1 | 1) => {
+    if (disabled) return;
+    const el = inputRef.current;
+    if (!el) return;
+    const { start, end } = selection();
+    // With a selection, collapse to its edge; otherwise step one character.
+    const next =
+      start !== end ? (delta < 0 ? start : end) : Math.min(value.length, Math.max(0, start + delta));
+    el.focus();
+    el.setSelectionRange(next, next);
+  };
+
   const press = (key: Key) => {
     if (disabled) return;
     const { start, end } = selection();
@@ -129,6 +141,30 @@ export function Calculator({
         </div>
 
         <div className="tool-row">
+          <button
+            type="button"
+            className="btn cursor"
+            disabled={disabled}
+            title="Move cursor back"
+            aria-label="Move cursor back"
+            data-testid="cursor-back"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => moveCaret(-1)}
+          >
+            ◀
+          </button>
+          <button
+            type="button"
+            className="btn cursor"
+            disabled={disabled}
+            title="Move cursor forward"
+            aria-label="Move cursor forward"
+            data-testid="cursor-forward"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => moveCaret(1)}
+          >
+            ▶
+          </button>
           <button
             type="button"
             className="btn clear"

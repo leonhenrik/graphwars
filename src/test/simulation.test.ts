@@ -242,6 +242,19 @@ describe('simultaneous rounds', () => {
     expect(next.winnerId).toBeNull();
   });
 
+  it('the player with the shorter function wins a mutual hit', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)]);
+    const straight = simulateShot(s, 'a', '0', 1, false);
+    const detour = simulateShot(s, 'b', '0.02*x*(x-20)', -1, false);
+    if (!straight.ok || !detour.ok) throw new Error('shots must be valid');
+    expect(straight.shot.targetId).toBe('b');
+    expect(detour.shot.targetId).toBe('a');
+
+    const next = applyRound(s, [straight.shot, detour.shot]);
+    expect(next.soldiers.map((x) => x.alive)).toEqual([true, false]);
+    expect(next.winnerId).toBe(1);
+  });
+
   it('does not mutate the input state', () => {
     const s = trio();
     const copy = structuredClone(s);

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session, MAX_PHOTO_BYTES, type Client } from '../../server/session';
 import { DEFAULT_OPTIONS } from '../game/constants';
 import { findShotWitness } from '../game/shotAnalysis';
+import { pathLength } from '../game/simulation';
 import type { GameOptions, MapId } from '../game/types';
 import {
   MAX_PHOTO_CHARS,
@@ -386,36 +387,43 @@ describe('simultaneous mode', () => {
     expect([p1, p2, p3].every((p) => p.player().canAct)).toBe(true);
   });
 
-  it('a player who is hit still gets their shot; eliminations happen together', () => {
+  it('a player who is hit still gets their shot; the shorter function wins a mutual hit', () => {
     const [p1, p2, p3] = startWith(3, { shotMode: 'simultaneous' });
     const kill2 = hit(1, 2);
     const kill1 = hit(2, 1);
     session.handle(p1, { type: 'fire', expression: kill2.expression, direction: kill2.direction });
     session.handle(p2, { type: 'fire', expression: kill1.expression, direction: kill1.direction });
     session.handle(p3, { type: 'fire', expression: '0', direction: -1 });
-    const outcomes = lastShots().shots.map((s) => [s.playerId, s.shot.targetId]);
+    const shots = lastShots().shots;
+    const outcomes = shots.map((s) => [s.playerId, s.shot.targetId]);
     expect(outcomes).toContainEqual([1, 'p2']);
     expect(outcomes).toContainEqual([2, 'p1']);
+    const len = (playerId: number) => pathLength(shots.find((s) => s.playerId === playerId)!.shot.points);
+    const p1Wins = len(1) < len(2);
 
     finishShots();
     const view = display.display();
-    expect(view.members.map((m) => m.alive)).toEqual([false, false, true]);
-    expect(view.phase).toBe('over');
-    expect(view.game!.winnerId).toBe(3);
-    expect(p3.player().winnerId).toBe(3);
+    expect(view.members.map((m) => m.alive)).toEqual([p1Wins, !p1Wins, true]);
+    expect(view.phase).toBe('playing');
+    expect(view.notice?.text).toMatch(/shorter function won the duel/);
   });
 
-  it('mutual elimination is a draw', () => {
+  it('mutual elimination of the last two players is a draw when the lengths are equal', () => {
     const [p1, p2] = startWith(2, { shotMode: 'simultaneous' });
     const a = hit(1, 2);
     const b = hit(2, 1);
     session.handle(p1, { type: 'fire', expression: a.expression, direction: a.direction });
     session.handle(p2, { type: 'fire', expression: b.expression, direction: b.direction });
+    const shots = lastShots().shots;
+    const [l1, l2] = shots.map((s) => pathLength(s.shot.points));
     finishShots();
     expect(display.display().phase).toBe('over');
-    expect(display.display().game!.winnerId).toBeNull();
-    expect(display.display().notice?.text).toMatch(/draw/i);
-    expect(p1.player().winnerId).toBeNull();
+    if (l1 === l2) {
+      expect(display.display().game!.winnerId).toBeNull();
+      expect(display.display().notice?.text).toMatch(/draw/i);
+    } else {
+      expect(display.display().game!.winnerId).toBe(l1! < l2! ? 1 : 2);
+    }
   });
 
   it('eliminated players no longer take part in later rounds', () => {
