@@ -53,6 +53,36 @@ describe('simulation – hits', () => {
     expect(applyShot(s, shot).soldiers.every((x) => x.alive)).toBe(true);
   });
 
+  it('leaves static obstacles unchanged after a hit', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)], [{ id: 'rock', x: 0, y: 0, radius: 2 }]);
+    const next = applyShot(s, shoot(s, 'a', '0'));
+    expect(next.battlefield.obstacles[0]).toMatchObject({ x: 0, y: 0 });
+    expect(next.battlefield.obstacles[0]?.damage).toBeUndefined();
+  });
+
+  it('repels a movable obstacle slightly away from the impact point', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)], [{ id: 'rock', x: 0, y: 0, radius: 2 }]);
+    const next = applyShot(s, shoot(s, 'a', '0'), 'movable');
+    expect(next.battlefield.obstacles[0]!.x).toBeGreaterThan(0);
+    expect(next.battlefield.obstacles[0]!.x).toBeLessThanOrEqual(0.8);
+  });
+
+  it('cracks a destroyable obstacle on the first hit and removes it on the second', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)], [{ id: 'rock', x: 0, y: 0, radius: 2 }]);
+    const shot = shoot(s, 'a', '0');
+    const damaged = applyShot(s, shot, 'destroyable');
+    expect(damaged.battlefield.obstacles[0]).toMatchObject({ id: 'rock', damage: 1 });
+    const destroyed = applyShot(damaged, shot, 'destroyable');
+    expect(destroyed.battlefield.obstacles).toHaveLength(0);
+  });
+
+  it('counts simultaneous hits against a destroyable obstacle', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)], [{ id: 'rock', x: 0, y: 0, radius: 2 }]);
+    const shot = shoot(s, 'a', '0');
+    const next = applyRound(s, [shot, shot], 'destroyable');
+    expect(next.battlefield.obstacles).toHaveLength(0);
+  });
+
   it('resolves the first collision when several targets lie on the path', () => {
     const s = makeState(
       [soldier('a', 1, -20, 0), soldier('near', 2, -5, 0), soldier('far', 3, 15, 0)],

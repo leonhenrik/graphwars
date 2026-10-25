@@ -140,6 +140,7 @@ function Segmented<T extends string>({
           {choices.map((c) => (
             <button
               key={c.value}
+              type="button"
               role="radio"
               aria-checked={value === c.value}
               className={`seg${value === c.value ? ' selected' : ''}`}
@@ -233,6 +234,17 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                   { value: 'direction', label: 'Direction' },
                 ]}
                 onChange={(preview) => update({ preview })}
+              />
+              <Segmented
+                testId="rule-obstacles"
+                label="Obstacles"
+                value={options.obstacleBehavior}
+                choices={[
+                  { value: 'static', label: 'Static' },
+                  { value: 'movable', label: 'Movable' },
+                  { value: 'destroyable', label: 'Destroyable' },
+                ]}
+                onChange={(obstacleBehavior) => update({ obstacleBehavior })}
               />
               <Segmented
                 testId="rule-player-movement"

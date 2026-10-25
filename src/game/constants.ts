@@ -28,6 +28,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   preview: 'off',
   playerMovement: false,
   playerMovementDistance: 0.5,
+  obstacleBehavior: 'static',
   countdownEnabled: true,
   countdownSeconds: 30,
 };

@@ -4,7 +4,7 @@ import { parseExpression } from './expressionParser';
 import { computeTrajectory, isUsableTrajectory } from './trajectory';
 import { shotAccuracy } from './shotScore';
 import { advanceRound, advanceTurn, validateShooter } from './turnManager';
-import type { GameState, PlayerShotStats, ShotDirection, ShotResult, Trajectory } from './types';
+import type { GameState, Obstacle, ObstacleBehavior, PlayerShotStats, ShotDirection, ShotResult, Trajectory } from './types';
 
 export type ShotAttempt = { ok: true; shot: ShotResult } | { ok: false; error: string };
 
@@ -102,12 +102,13 @@ export function simulateShot(
 }
 
 /** Applies a completed shot: eliminates a hit player, records the shot's stats, then advances the turn. */
-export function applyShot(state: GameState, shot: ShotResult): GameState {
+export function applyShot(state: GameState, shot: ShotResult, obstacleBehavior: ObstacleBehavior = 'static'): GameState {
   const soldiers =
     shot.outcome === 'hit-soldier'
       ? state.soldiers.map((s) => (s.id === shot.targetId ? { ...s, alive: false } : s))
       : state.soldiers;
-  return advanceTurn({ ...state, soldiers, shotStats: recordShotStats(state, [shot]) });
+  const battlefield = applyObstacleHits(state, [shot], obstacleBehavior);
+  return advanceTurn({ ...state, soldiers, battlefield, shotStats: recordShotStats(state, [shot]) });
 }
 
 /** Adds each successful shot (one that hit another player) to its shooter's running totals. */
@@ -155,8 +156,58 @@ export function roundEliminations(shots: ShotResult[]): Set<string> {
  * Applies all shots of one simultaneous round at once. Every shot was simulated against the same
  * state, so a player who is hit still gets their own shot off; eliminations happen together.
  */
-export function applyRound(state: GameState, shots: ShotResult[]): GameState {
+export function applyRound(state: GameState, shots: ShotResult[], obstacleBehavior: ObstacleBehavior = 'static'): GameState {
   const hit = roundEliminations(shots);
   const soldiers = state.soldiers.map((s) => (hit.has(s.id) ? { ...s, alive: false } : s));
-  return advanceRound({ ...state, soldiers, shotStats: recordShotStats(state, shots) });
+  const battlefield = applyObstacleHits(state, shots, obstacleBehavior);
+  return advanceRound({ ...state, soldiers, battlefield, shotStats: recordShotStats(state, shots) });
+}
+
+const DESTROYABLE_OBSTACLE_HITS = 2;
+const MOVABLE_OBSTACLE_STEP = 0.8;
+
+function applyObstacleHits(state: GameState, shots: ShotResult[], behavior: ObstacleBehavior): GameState['battlefield'] {
+  if (behavior === 'static') return state.battlefield;
+  const obstacles = state.battlefield.obstacles.map((obstacle) => ({ ...obstacle }));
+  for (const shot of shots) {
+    if (shot.outcome !== 'hit-obstacle' || !shot.targetId || !shot.impact) continue;
+    const index = obstacles.findIndex((obstacle) => obstacle.id === shot.targetId);
+    if (index < 0) continue;
+    const obstacle = obstacles[index] as Obstacle;
+    if (behavior === 'destroyable') {
+      const damage = (obstacle.damage ?? 0) + 1;
+      if (damage >= DESTROYABLE_OBSTACLE_HITS) obstacles.splice(index, 1);
+      else obstacles[index] = { ...obstacle, damage };
+      continue;
+    }
+
+    const dx = obstacle.x - shot.impact.x;
+    const dy = obstacle.y - shot.impact.y;
+    const length = Math.hypot(dx, dy);
+    if (length === 0) continue;
+    const step = MOVABLE_OBSTACLE_STEP;
+    const factors = [1, 0.5, 0.25];
+    for (const factor of factors) {
+      const x = Math.max(
+        state.battlefield.bounds.minX + obstacle.radius,
+        Math.min(state.battlefield.bounds.maxX - obstacle.radius, obstacle.x + (dx / length) * step * factor),
+      );
+      const y = Math.max(
+        state.battlefield.bounds.minY + obstacle.radius,
+        Math.min(state.battlefield.bounds.maxY - obstacle.radius, obstacle.y + (dy / length) * step * factor),
+      );
+      const clearOfSoldiers = state.soldiers.every(
+        (soldier) => !soldier.alive || Math.hypot(soldier.x - x, soldier.y - y) >= soldier.radius + obstacle.radius + 0.08,
+      );
+      const clearOfObstacles = obstacles.every(
+        (other, otherIndex) =>
+          otherIndex === index || Math.hypot(other.x - x, other.y - y) >= other.radius + obstacle.radius + 0.08,
+      );
+      if (clearOfSoldiers && clearOfObstacles) {
+        obstacles[index] = { ...obstacle, x, y };
+        break;
+      }
+    }
+  }
+  return { ...state.battlefield, obstacles };
 }

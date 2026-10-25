@@ -8,6 +8,7 @@ import type {
   GameOptions,
   GameState,
   MapId,
+  ObstacleBehavior,
   PlayerId,
   PreviewMode,
   ShotDirection,
@@ -141,6 +142,7 @@ const JPEG_DATA_URL = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 const MAP_IDS: MapId[] = ['classic', 'pillars', 'scatter', 'chaos'];
 const SHOT_MODES: ShotMode[] = ['turns', 'simultaneous'];
 const PREVIEW_MODES: PreviewMode[] = ['off', 'curve', 'direction'];
+const OBSTACLE_BEHAVIORS: ObstacleBehavior[] = ['static', 'movable', 'destroyable'];
 
 function parseOptions(raw: unknown): GameOptions | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -148,6 +150,7 @@ function parseOptions(raw: unknown): GameOptions | null {
   if (
     !SHOT_MODES.includes(o.shotMode as ShotMode) ||
     !PREVIEW_MODES.includes(o.preview as PreviewMode) ||
+    !OBSTACLE_BEHAVIORS.includes(o.obstacleBehavior as ObstacleBehavior) ||
     typeof o.playerMovement !== 'boolean' ||
     typeof o.playerMovementDistance !== 'number' ||
     !Number.isFinite(o.playerMovementDistance) ||
@@ -164,6 +167,7 @@ function parseOptions(raw: unknown): GameOptions | null {
   return {
     shotMode: o.shotMode as ShotMode,
     preview: o.preview as PreviewMode,
+    obstacleBehavior: o.obstacleBehavior as ObstacleBehavior,
     playerMovement: o.playerMovement,
     playerMovementDistance: o.playerMovementDistance,
     countdownEnabled: o.countdownEnabled,

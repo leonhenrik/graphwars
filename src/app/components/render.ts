@@ -232,6 +232,20 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       ctx.lineTo(cx - r * 0.16 + i * r * 0.28, cy - r * 0.24);
       ctx.stroke();
     }
+    if ((o.damage ?? 0) > 0) {
+      ctx.strokeStyle = 'rgba(65, 54, 40, 0.72)';
+      ctx.lineWidth = Math.max(1, scale * 0.055);
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.12, cy - r * 0.78);
+      ctx.lineTo(cx - r * 0.28, cy - r * 0.28);
+      ctx.lineTo(cx - r * 0.04, cy - r * 0.08);
+      ctx.lineTo(cx - r * 0.35, cy + r * 0.3);
+      ctx.moveTo(cx - r * 0.28, cy - r * 0.28);
+      ctx.lineTo(cx + r * 0.1, cy - r * 0.42);
+      ctx.moveTo(cx - r * 0.04, cy - r * 0.08);
+      ctx.lineTo(cx + r * 0.34, cy + r * 0.16);
+      ctx.stroke();
+    }
     ctx.restore();
     ctx.restore();
   }

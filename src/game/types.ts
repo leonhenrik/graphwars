@@ -25,6 +25,8 @@ export interface Obstacle {
   x: number;
   y: number;
   radius: number;
+  /** Hits taken while obstacle behavior is destroyable. */
+  damage?: number;
 }
 
 export interface Bounds {
@@ -60,6 +62,7 @@ export type MatchStatus = 'playing' | 'over';
 /** 'turns': one player at a time. 'simultaneous': everybody enters a function, all shots resolve together. */
 export type ShotMode = 'turns' | 'simultaneous';
 export type PreviewMode = 'off' | 'curve' | 'direction';
+export type ObstacleBehavior = 'static' | 'movable' | 'destroyable';
 
 export interface GameOptions {
   shotMode: ShotMode;
@@ -69,6 +72,8 @@ export interface GameOptions {
   playerMovement: boolean;
   /** Distance living players move per round, in battlefield units. */
   playerMovementDistance: number;
+  /** Whether obstacle hits leave obstacles unchanged, repel them, or damage them until destroyed. */
+  obstacleBehavior: ObstacleBehavior;
   countdownEnabled: boolean;
   countdownSeconds: number;
 }

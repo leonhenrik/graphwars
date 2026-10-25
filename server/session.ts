@@ -361,8 +361,8 @@ export class Session {
     const eliminated = this.simultaneous ? roundEliminations(pending.shots.map((f) => f.shot)) : undefined;
     const summaries = pending.shots.map((f) => describeShot(game, f.shot, eliminated));
     const next = this.simultaneous
-      ? applyRound(game, pending.shots.map((f) => f.shot))
-      : applyShot(game, (pending.shots[0] as FiredShot).shot);
+      ? applyRound(game, pending.shots.map((f) => f.shot), this.options.obstacleBehavior)
+      : applyShot(game, (pending.shots[0] as FiredShot).shot, this.options.obstacleBehavior);
     if (this.soloMode) {
       this.soloRounds++;
       if (next.status === 'playing') {

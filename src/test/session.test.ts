@@ -62,6 +62,7 @@ const TEST_OPTIONS: GameOptions = {
   preview: 'curve',
   playerMovement: false,
   playerMovementDistance: 0.5,
+  obstacleBehavior: 'static',
   countdownEnabled: false,
   countdownSeconds: 30,
 };
@@ -253,6 +254,7 @@ describe('game options', () => {
       preview: 'off',
       playerMovement: false,
       playerMovementDistance: 0.5,
+      obstacleBehavior: 'static',
       countdownEnabled: true,
       countdownSeconds: 30,
     });
@@ -265,6 +267,7 @@ describe('game options', () => {
       preview: 'off',
       playerMovement: true,
       playerMovementDistance: 1.2,
+      obstacleBehavior: 'destroyable',
       countdownEnabled: true,
       countdownSeconds: 45,
     }, 'scatter', 9);
@@ -273,6 +276,7 @@ describe('game options', () => {
       preview: 'off',
       playerMovement: true,
       playerMovementDistance: 1.2,
+      obstacleBehavior: 'destroyable',
       countdownEnabled: true,
       countdownSeconds: 45,
     };
@@ -931,6 +935,7 @@ describe('parseClientMessage', () => {
     preview: 'curve',
     playerMovement: false,
     playerMovementDistance: 0.5,
+    obstacleBehavior: 'static',
     countdownEnabled: false,
     countdownSeconds: 30,
   };
@@ -983,6 +988,7 @@ describe('parseClientMessage', () => {
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, shotMode: 'chaos' } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, preview: true } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, preview: 'yes' } },
+    { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, obstacleBehavior: 'bouncy' } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovement: undefined } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovementDistance: undefined } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovementDistance: 0 } },
