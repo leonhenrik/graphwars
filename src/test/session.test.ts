@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session, MAX_PHOTO_BYTES, type Client } from '../../server/session';
-import { DEFAULT_OPTIONS } from '../game/constants';
 import { findShotWitness } from '../game/shotAnalysis';
 import { pathLength } from '../game/simulation';
 import type { GameOptions, MapId } from '../game/types';
@@ -57,8 +56,11 @@ function addPlayer(token: string | null = null) {
   return c;
 }
 
+/** The option set these tests were written against; the app's own defaults are covered separately. */
+const TEST_OPTIONS: GameOptions = { shotMode: 'turns', preview: true, countdownEnabled: false, countdownSeconds: 30 };
+
 function configure(options: Partial<GameOptions> = {}, mapId: MapId = 'classic', seed = 1) {
-  session.handle(display, { type: 'configure', mapId, seed, options: { ...DEFAULT_OPTIONS, ...options } });
+  session.handle(display, { type: 'configure', mapId, seed, options: { ...TEST_OPTIONS, ...options } });
 }
 
 type Phones = [TestClient, TestClient, TestClient, TestClient, TestClient, TestClient];
@@ -192,7 +194,7 @@ describe('lobby', () => {
 
 describe('game options', () => {
   it('defaults to turns, preview on, countdown off', () => {
-    expect(display.display().options).toEqual({ shotMode: 'turns', preview: true, countdownEnabled: false, countdownSeconds: 30 });
+    expect(display.display().options).toEqual({ shotMode: 'simultaneous', preview: false, countdownEnabled: true, countdownSeconds: 30 });
   });
 
   it('are configured in the lobby, shown to phones, and locked once the match runs', () => {
@@ -214,6 +216,20 @@ describe('game options', () => {
     startWith(2, { shotMode: 'simultaneous' });
     session.handle(display, { type: 'restart' });
     expect(display.display().options.shotMode).toBe('simultaneous');
+  });
+
+  it('picks a new seed when restarting a scatter or chaos map', () => {
+    startWith(2, {}, 'scatter');
+    expect(display.display().seed).toBe(1);
+    session.handle(display, { type: 'restart' });
+    expect(display.display().mapId).toBe('scatter');
+    expect(display.display().seed).not.toBe(1);
+  });
+
+  it('keeps the seed of a classic map when restarting', () => {
+    startWith(2, {}, 'classic');
+    session.handle(display, { type: 'restart' });
+    expect(display.display().seed).toBe(1);
   });
 });
 

@@ -209,10 +209,16 @@ export class Session {
         }
         this.startMatchWith({ playerCount: this.members.length, mapId: this.config.mapId, seed: this.config.seed });
         return;
-      case 'restart':
+      case 'restart': {
         if (this.phase === 'lobby' || !this.game) return;
-        this.startMatchWith(this.game.config);
+        const config = { ...this.game.config };
+        if (config.mapId === 'scatter' || config.mapId === 'chaos') {
+          config.seed = Math.floor(Math.random() * 1_000_000);
+          this.config = { mapId: config.mapId, seed: config.seed };
+        }
+        this.startMatchWith(config);
         return;
+      }
       case 'lobby':
         this.cancelPending();
         this.stopCountdown();

@@ -60,6 +60,13 @@ describe('server over real WebSockets', () => {
     phone2.send({ type: 'hello', role: 'player', token: null });
 
     await big.until(big.lastDisplay((v) => v.members.length === 2));
+    big.send({
+      type: 'configure',
+      mapId: 'classic',
+      seed: 1,
+      options: { shotMode: 'turns', preview: true, countdownEnabled: false, countdownSeconds: 30 },
+    });
+    await big.until(big.lastDisplay((v) => v.options.shotMode === 'turns'));
     big.send({ type: 'start' });
     await phone1.until(phone1.lastPlayer((v) => v.phase === 'playing' && v.canAct));
 

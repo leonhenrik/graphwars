@@ -234,7 +234,10 @@ body {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
-  font: 16px ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, ui-monospace, monospace;
+  font-size: 16px;
+  font-variant-ligatures: none;
+  letter-spacing: 0.02em;
 }
 
 .fn-input:focus {
@@ -380,7 +383,8 @@ body {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 12px;
-  margin-bottom: 10px;
+  margin-top: 14px;
+  margin-bottom: 4px;
 }
 
 .key {

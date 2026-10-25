@@ -50,12 +50,12 @@ function statusOf(view: PlayerView): { text: string; tone: 'go' | 'wait' | 'out'
   if (view.shotInFlight) return { text: simultaneous ? 'Shots in flight…' : 'Shot in flight…', tone: 'wait' };
   if (view.canAct) {
     return {
-      text: simultaneous ? `Enter a function and fire!` : 'Enter a function and fire.',
+      text: simultaneous ? `Enter a function!` : 'Enter a function!',
       tone: 'go',
     };
   }
   if (simultaneous && view.submitted) {
-    return { text: `Locked in ✓ Waiting for the others (${view.firedCount}/${view.livingCount})`, tone: 'wait' };
+    return { text: `Waiting (${view.firedCount}/${view.livingCount})`, tone: 'wait' };
   }
   return { text: `Waiting for ${view.currentPlayerName ?? 'the next player'}…`, tone: 'wait' };
 }
@@ -137,7 +137,7 @@ export function PlayerApp() {
   const status = statusOf(view);
   const submittedNow = view.options.shotMode === 'simultaneous' && view.submitted;
   const canFire = canAct && view.draftError === null && expression.trim().length > 0 && connected;
-  const fireLabel = canAct ? 'Fire! 🚀' : submittedNow ? 'Locked in ✓' : view.shotInFlight ? 'Shot fired…' : 'Not your turn';
+  const fireLabel = canAct ? 'Fire!' : submittedNow ? 'Locked in' : view.shotInFlight ? 'Shot fired…' : 'Not your turn';
 
   return (
     <div className="phone" data-testid="phone">
