@@ -4,7 +4,7 @@ import type { FiredShot } from '../../shared/protocol';
 import {
   drawScene,
   partialPath,
-  pathLength,
+  shotDurationMs,
   EFFECT_DURATION_MS,
   type DirectionLine,
   type Effect,
@@ -32,11 +32,6 @@ interface Props {
   effects: Effect[];
   onAnimationComplete: (animationId: number) => void;
 }
-
-/** Shot speed in battlefield units per second, and the min/max time a shot takes (slow enough to follow). */
-const UNITS_PER_SECOND = 18;
-const MIN_SHOT_MS = 1500;
-const MAX_SHOT_MS = 5000;
 
 export function Battlefield({
   state,
@@ -98,7 +93,7 @@ export function Battlefield({
       start: performance.now(),
       shots: animation.shots.map((shot) => ({
         shot,
-        durationMs: Math.min(MAX_SHOT_MS, Math.max(MIN_SHOT_MS, (pathLength(shot.shot.points) / UNITS_PER_SECOND) * 1000)),
+        durationMs: shotDurationMs(shot.shot.points),
       })),
       done: false,
     };
@@ -125,7 +120,7 @@ export function Battlefield({
       if (anim && !anim.done) {
         let allDone = true;
         shotLines = anim.shots.map(({ shot, durationMs }) => {
-          const fraction = Math.min(1, (now - anim.start) / durationMs);
+          const fraction = durationMs === 0 ? 1 : Math.min(1, (now - anim.start) / durationMs);
           if (fraction < 1) allDone = false;
           return { points: partialPath(shot.shot.points, fraction), color: shot.color };
         });

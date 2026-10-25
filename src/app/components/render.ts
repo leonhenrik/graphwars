@@ -92,6 +92,12 @@ export function pathLength(points: TrajectoryPoint[]): number {
   return total;
 }
 
+export const SHOT_SPEED_UNITS_PER_SECOND = 18;
+
+export function shotDurationMs(points: TrajectoryPoint[]): number {
+  return (pathLength(points) / SHOT_SPEED_UNITS_PER_SECOND) * 1000;
+}
+
 interface StrokeStyle {
   color: string;
   alpha: number;
@@ -273,12 +279,12 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
 
   // Faint dashed trace of the previous shot(s)
   for (const trace of scene.traces) {
-    drawLine(trace.points, { color: trace.color, alpha: 0.38, width: 2, dash: [3, 7] });
+    drawLine(trace.points, { color: trace.color, alpha: 0.52, width: 2, dash: [3, 7] });
   }
 
   // Preview trajectories
   for (const preview of scene.previews) {
-    drawLine(preview.points, { color: preview.color, alpha: 0.75, width: 2, dash: [6, 6] });
+    drawLine(preview.points, { color: preview.color, alpha: 0.9, width: 2.5, dash: [6, 6] });
   }
 
   for (const arrow of scene.previewDirections ?? []) {
@@ -389,7 +395,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     ctx.fill();
     ctx.lineJoin = 'round';
     ctx.stroke();
-    ctx.fillStyle = '#302f29';
+    ctx.fillStyle = '#fff9e9';
     ctx.font = `bold ${Math.max(10, r * 1.1)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -476,8 +482,8 @@ function drawPencilLine(
   ctx.strokeStyle = color;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.globalAlpha = 0.78;
-  ctx.lineWidth = 2.2;
+  ctx.globalAlpha = 0.95;
+  ctx.lineWidth = 2.8;
   strokePath(ctx, points, px, py);
 
   ctx.globalAlpha = 0.27;
