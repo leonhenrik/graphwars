@@ -145,6 +145,9 @@ export function PlayerApp() {
         <Avatar member={you} size={30} />
         <strong data-testid="phone-name">{you.name}</strong>
         {!connected && <span className="offline-tag">reconnecting…</span>}
+        <span className={`phone-status ${status.tone}`} data-testid="phone-status">
+          {status.text}
+        </span>
         {view.phase !== 'lobby' && (
           <span className="phone-round" data-testid="phone-round">
             {view.options.shotMode === 'simultaneous' ? 'Round' : 'Turn'} {view.turnNumber}
@@ -174,8 +177,8 @@ export function PlayerApp() {
         />
       )}
       {view.phase === 'playing' && <Countdown timer={view.timer} />}
-      <div className={`phone-status ${status.tone}`} data-testid="phone-status">
-        {status.text}
+      <div id="fn-error" className="fn-error" role="alert" data-testid="expression-error">
+        {canAct ? view.draftError : null}
       </div>
       {view.notice && (
         <div className={`message inline ${view.notice.kind}`} role="status" aria-live="polite" data-testid="message">

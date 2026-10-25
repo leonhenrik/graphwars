@@ -143,10 +143,6 @@ export function Calculator({
           ))}
         </div>
 
-        <div id="fn-error" className="fn-error" role="alert" data-testid="expression-error">
-          {error}
-        </div>
-
         <div className="tool-row">
           <button
             type="button"
