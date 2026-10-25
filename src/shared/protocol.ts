@@ -65,6 +65,8 @@ export interface FiredShot {
 
 export interface DisplayView {
   phase: Phase;
+  soloMode: boolean;
+  soloRounds: number;
   mapId: MapId;
   seed: number;
   options: GameOptions;
@@ -80,6 +82,8 @@ export interface DisplayView {
 
 export interface PlayerView {
   phase: Phase;
+  soloMode: boolean;
+  soloRounds: number;
   options: GameOptions;
   you: MemberView;
   playerCount: number;

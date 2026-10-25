@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { DEFAULT_OPTIONS, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS } from '../src/game/constants';
+import { DEFAULT_OPTIONS, MAX_PLAYERS, PLAYER_COLORS } from '../src/game/constants';
 import { createInitialState, defaultDirection, getPlayerSoldier } from '../src/game/gameState';
 import { describeShot } from '../src/game/messages';
 import { applyRound, applyShot, buildTrajectory, roundEliminations, simulateShot } from '../src/game/simulation';
@@ -78,6 +78,8 @@ export class Session {
   private config: { mapId: MapId; seed: number } = { mapId: 'classic', seed: 1 };
   private options: GameOptions = { ...DEFAULT_OPTIONS };
   private game: GameState | null = null;
+  private soloMode = false;
+  private soloRounds = 0;
   private drafts = new Map<PlayerId, Draft>();
   private submissions = new Map<PlayerId, FiredShot>();
   private notice: Notice | null = null;
@@ -148,7 +150,7 @@ export class Session {
   }
 
   private get simultaneous(): boolean {
-    return this.options.shotMode === 'simultaneous';
+    return !this.soloMode && this.options.shotMode === 'simultaneous';
   }
 
   private hello(client: Client, message: Extract<ClientMessage, { type: 'hello' }>): void {
@@ -208,15 +210,7 @@ export class Session {
         return;
       }
       case 'lobby':
-        this.cancelPending();
-        this.stopCountdown();
-        this.phase = 'lobby';
-        this.game = null;
-        this.drafts.clear();
-        this.submissions.clear();
-        this.notice = null;
-        this.dropOfflineMembers();
-        this.broadcast();
+        this.returnToLobby();
         return;
       case 'skipTurn':
         this.endWaiting("The host didn't wait any longer.", false);
@@ -369,6 +363,16 @@ export class Session {
     const next = this.simultaneous
       ? applyRound(game, pending.shots.map((f) => f.shot))
       : applyShot(game, (pending.shots[0] as FiredShot).shot);
+    if (this.soloMode) {
+      this.soloRounds++;
+      if (next.status === 'playing') {
+        next.turn = {
+          currentPlayerId: 1,
+          turnNumber: game.turn.turnNumber + 1,
+          hasFired: false,
+        };
+      }
+    }
     this.game = this.withRoundMovement(game, next);
     this.drafts.clear();
     this.submissions.clear();
@@ -424,7 +428,10 @@ export class Session {
       const draft = member ? this.drafts.get(member.playerId) : undefined;
       if (autoFire && member && draft && this.fire(member, draft.expression, draft.direction, true)) return;
       this.setNotice('warning', `${this.nameOf(game.turn.currentPlayerId)}'s turn was skipped. ${reason}`, false);
-      this.game = this.withRoundMovement(game, advanceTurn(game));
+      const advanced = this.soloMode
+        ? { ...game, turn: { currentPlayerId: 1, turnNumber: game.turn.turnNumber + 1, hasFired: false } }
+        : advanceTurn(game);
+      this.game = this.withRoundMovement(game, advanced);
     }
     this.drafts.clear();
     this.startCountdown();
@@ -435,7 +442,10 @@ export class Session {
     this.cancelPending();
     this.matchId++;
     this.game = createInitialState(config);
-    for (const player of this.game.players) player.name = this.nameOf(player.id);
+    this.soloRounds = 0;
+    for (const player of this.game.players) {
+      player.name = this.soloMode && player.id === 2 ? 'Target' : this.nameOf(player.id);
+    }
     this.phase = 'playing';
     this.drafts.clear();
     this.submissions.clear();
@@ -447,11 +457,16 @@ export class Session {
   private startMatch(): void {
     if (this.phase !== 'lobby') return;
     this.dropOfflineMembers();
-    if (this.members.length < MIN_PLAYERS) {
-      this.setNotice('error', `Waiting for players: at least ${MIN_PLAYERS} phones must join.`);
+    if (this.members.length === 0) {
+      this.setNotice('error', 'Waiting for at least one phone to join.');
       return;
     }
-    this.startMatchWith({ playerCount: this.members.length, mapId: this.config.mapId, seed: this.config.seed });
+    this.soloMode = this.members.length === 1;
+    this.startMatchWith({
+      playerCount: this.soloMode ? 2 : this.members.length,
+      mapId: this.config.mapId,
+      seed: this.config.seed,
+    });
   }
 
   private returnToLobby(): void {
@@ -459,6 +474,8 @@ export class Session {
     this.stopCountdown();
     this.phase = 'lobby';
     this.game = null;
+    this.soloMode = false;
+    this.soloRounds = 0;
     this.drafts.clear();
     this.submissions.clear();
     this.notice = null;
@@ -579,6 +596,8 @@ export class Session {
           }));
     const display: DisplayView = {
       phase: this.phase,
+      soloMode: this.soloMode,
+      soloRounds: this.soloRounds,
       mapId: this.config.mapId,
       seed: this.config.seed,
       options: this.options,
@@ -608,6 +627,8 @@ export class Session {
     const mine = game ? getPlayerSoldier(game, member.playerId) : undefined;
     return {
       phase: this.phase,
+      soloMode: this.soloMode,
+      soloRounds: this.soloRounds,
       options: this.options,
       you: this.memberView(member),
       playerCount: this.members.length,

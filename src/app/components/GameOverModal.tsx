@@ -4,23 +4,39 @@ import type { MemberView } from '../../shared/protocol';
 export function GameOverModal({
   game,
   members,
+  soloMode,
+  soloRounds,
   onPlayAgain,
   onLobby,
 }: {
   game: GameState;
   members: MemberView[];
+  soloMode: boolean;
+  soloRounds: number;
   onPlayAgain: () => void;
   onLobby: () => void;
 }) {
   const winner = members.find((m) => m.playerId === game.winnerId);
+  const soloStats = soloMode ? game.shotStats.find((s) => s.playerId === game.players[0]?.id) : undefined;
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="gameover-title" data-testid="game-over">
       <div className="modal">
-        <h2 id="gameover-title" style={{ color: winner?.color }}>
-          {winner ? `${winner.name} wins!` : 'Draw'}
+        <h2 id="gameover-title" style={{ color: soloMode ? game.players[0]?.color : winner?.color }}>
+          {soloMode ? 'Target hit!' : winner ? `${winner.name} wins!` : 'Draw'}
         </h2>
-        <p>The last player standing takes the match.</p>
-        <table className="stats-table" data-testid="shot-stats">
+        <p>
+          {soloMode
+            ? `You hit the target in ${soloRounds} ${soloRounds === 1 ? 'round' : 'rounds'}.`
+            : 'The last player standing takes the match.'}
+        </p>
+        {soloMode && soloStats && (
+          <p data-testid="solo-accuracy">
+            Average accuracy: {soloStats.successfulShots > 0
+              ? `${Math.round(soloStats.accuracySum / soloStats.successfulShots)}%`
+              : '—'}
+          </p>
+        )}
+        {!soloMode && <table className="stats-table" data-testid="shot-stats">
           <thead>
             <tr>
               <th>Player</th>
@@ -42,7 +58,7 @@ export function GameOverModal({
               );
             })}
           </tbody>
-        </table>
+        </table>}
         <div className="button-row">
           <button className="btn" onClick={onLobby}>
             Back to lobby

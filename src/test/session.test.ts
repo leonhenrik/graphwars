@@ -117,17 +117,20 @@ describe('lobby', () => {
     expect(c.player().playerCount).toBe(3);
   });
 
-  it('needs at least two phones, then starts a match with exactly one soldier per phone', () => {
+  it('starts a solo challenge with one phone, or one soldier per phone when more players join', () => {
     addPlayer();
     session.handle(display, { type: 'start' });
-    expect(display.display().phase).toBe('lobby');
-    expect(display.display().notice?.kind).toBe('error');
+    expect(display.display().phase).toBe('playing');
+    expect(display.display().soloMode).toBe(true);
+    expect(display.display().game!.players).toHaveLength(2);
+    session.handle(display, { type: 'lobby' });
 
     addPlayer();
     addPlayer();
     session.handle(display, { type: 'start' });
     const view = display.display();
     expect(view.phase).toBe('playing');
+    expect(view.soloMode).toBe(false);
     expect(view.game!.players).toHaveLength(3);
     expect(view.game!.soldiers).toHaveLength(3);
   });
@@ -183,9 +186,10 @@ describe('lobby', () => {
     expect(c.player().you.playerId).toBe(2);
   });
 
-  it('does not start with fewer than two online phones', () => {
-    const [a] = [addPlayer(), addPlayer()];
+  it('does not start when no phones are online', () => {
+    const [a, b] = [addPlayer(), addPlayer()];
     session.disconnect(a);
+    session.disconnect(b);
     session.handle(display, { type: 'start' });
     expect(display.display().phase).toBe('lobby');
     expect(display.display().notice?.kind).toBe('error');
@@ -198,11 +202,8 @@ describe('lobby', () => {
     expect(display.display().members).toHaveLength(6);
   });
 
-  it('allows only player 1 to start once the minimum number of players have joined', () => {
+  it('allows player 1 but not player 2 to start a multiplayer match', () => {
     const p1 = addPlayer();
-    session.handle(p1, { type: 'start' });
-    expect(display.display().phase).toBe('lobby');
-
     const p2 = addPlayer();
     session.handle(p2, { type: 'start' });
     expect(display.display().phase).toBe('lobby');
@@ -210,6 +211,38 @@ describe('lobby', () => {
     session.handle(p1, { type: 'start' });
     expect(display.display().phase).toBe('playing');
     expect(display.display().game!.players).toHaveLength(2);
+  });
+
+  it('starts a solo challenge with a stationary target and counts shots as rounds', () => {
+    const [p1] = startWith(1, { playerMovement: true });
+    const firstState = display.display().game!;
+    expect(display.display().soloMode).toBe(true);
+    expect(display.display().soloRounds).toBe(0);
+    expect(firstState.players).toHaveLength(2);
+    expect(firstState.players[1]!.name).toBe('Target');
+    expect(p1.player().canAct).toBe(true);
+
+    const targetBefore = firstState.soldiers[1]!;
+    const shooterBefore = firstState.soldiers[0]!;
+    session.handle(p1, { type: 'fire', expression: '0', direction: 1 });
+    finishShots();
+
+    const afterMiss = display.display();
+    expect(afterMiss.phase).toBe('playing');
+    expect(afterMiss.game!.turn.currentPlayerId).toBe(1);
+    expect(afterMiss.game!.turn.turnNumber).toBe(2);
+    expect(afterMiss.soloRounds).toBe(1);
+    expect(afterMiss.game!.soldiers[0]).not.toMatchObject({ x: shooterBefore.x, y: shooterBefore.y });
+    expect(afterMiss.game!.soldiers[1]).not.toMatchObject({ x: targetBefore.x, y: targetBefore.y });
+
+    const witness = hit(1, 2);
+    session.handle(p1, { type: 'fire', expression: witness.expression, direction: witness.direction });
+    finishShots();
+    expect(display.display().phase).toBe('over');
+    expect(display.display().game!.winnerId).toBe(1);
+    expect(display.display().soloRounds).toBe(2);
+    expect(p1.player().soloMode).toBe(true);
+    expect(p1.player().soloRounds).toBe(2);
   });
 });
 

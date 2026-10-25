@@ -68,12 +68,9 @@ export function SelfieCard({ you, onPhoto, onName, disabled }: Props) {
             Save name
           </button>
         </form>
-        <p className="selfie-hint">
-          {hasPhoto ? 'Looking good! This photo is your bubble on the big screen.' : 'Take a selfie: it fills your bubble on the big screen.'}
-        </p>
         <div className="button-row">
           <button type="button" className="btn primary" disabled={disabled || busy} onClick={() => inputRef.current?.click()}>
-            {busy ? 'Processing…' : hasPhoto ? '📷 Retake' : '📷 Take selfie'}
+            {busy ? 'Processing…' : hasPhoto ? 'Retake' : 'Take selfie'}
           </button>
           {hasPhoto && (
             <button type="button" className="btn" disabled={disabled || busy} onClick={() => onPhoto(null)}>

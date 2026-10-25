@@ -4,7 +4,7 @@ import { Calculator } from './components/Calculator';
 import { Countdown } from './components/Countdown';
 import { SelfieCard } from './components/SelfieCard';
 import { useSocket } from '../client/useSocket';
-import { DEFAULT_EXPRESSION, MIN_PLAYERS } from '../game/constants';
+import { DEFAULT_EXPRESSION } from '../game/constants';
 import type { ShotDirection } from '../game/types';
 import type { PlayerView, ServerMessage } from '../shared/protocol';
 
@@ -45,9 +45,9 @@ function statusOf(view: PlayerView): { text: string; tone: 'go' | 'wait' | 'out'
     return {
       text:
         you.playerId === 1
-          ? view.playerCount >= MIN_PLAYERS
-            ? `${view.playerCount} players joined — ready to start`
-            : `Waiting for players (${view.playerCount}/${MIN_PLAYERS})`
+          ? view.playerCount === 1
+            ? 'Ready to start a solo challenge'
+            : `${view.playerCount} players joined — ready to start`
           : `Waiting for the host to start (${view.playerCount} joined)`,
       tone: 'wait',
     };
@@ -177,17 +177,17 @@ export function PlayerApp() {
       {view.phase === 'lobby' && you.playerId === 1 && (
         <div className="phone-lobby-actions">
           <p>
-            {view.playerCount >= MIN_PLAYERS
-              ? `${view.playerCount} players ready`
-              : `Waiting for ${MIN_PLAYERS - view.playerCount} more player to join`}
+            {view.playerCount === 1
+              ? 'Play solo or wait for more players'
+              : `${view.playerCount} players ready`}
           </p>
           <button
             className="btn primary"
             onClick={() => send({ type: 'start' })}
-            disabled={!connected || view.playerCount < MIN_PLAYERS}
+            disabled={!connected || view.playerCount < 1}
             data-testid="phone-start-button"
           >
-            {view.playerCount >= MIN_PLAYERS ? 'Start game' : `Need at least ${MIN_PLAYERS} players`}
+            {view.playerCount === 1 ? 'Start solo challenge' : 'Start game'}
           </button>
         </div>
       )}
@@ -212,9 +212,13 @@ export function PlayerApp() {
         <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="phone-gameover-title" data-testid="phone-game-over">
           <div className="modal phone-gameover-modal">
             <h2 id="phone-gameover-title">
-              {view.winnerName ? `${view.winnerName} wins!` : 'Draw'}
+              {view.soloMode ? 'Target hit!' : view.winnerName ? `${view.winnerName} wins!` : 'Draw'}
             </h2>
-            <p>Play another round?</p>
+            <p>
+              {view.soloMode
+                ? `You hit the target in ${view.soloRounds} ${view.soloRounds === 1 ? 'round' : 'rounds'}.`
+                : 'Play another round?'}
+            </p>
             <div className="phone-gameover-actions">
               <button className="btn" onClick={() => send({ type: 'lobby' })}>
                 Back to lobby

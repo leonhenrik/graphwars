@@ -264,6 +264,8 @@ export function DisplayApp() {
         <GameOverModal
           game={game}
           members={view.members}
+          soloMode={view.soloMode}
+          soloRounds={view.soloRounds}
           onPlayAgain={() => send({ type: 'restart' })}
           onLobby={() => send({ type: 'lobby' })}
         />

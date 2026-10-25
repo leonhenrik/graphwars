@@ -158,7 +158,7 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
   // Phones that dropped (e.g. while the camera app is open) keep their seat for a while but do not count yet.
   const online = members.filter((m) => m.connected).length;
   const thumbPlayers = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, online));
-  const canStart = online >= MIN_PLAYERS;
+  const canStart = online > 0;
   const update = (patch: Partial<GameOptions>) => onConfigure(mapId, seed, { ...options, ...patch });
 
   return (
@@ -202,7 +202,11 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
               </div>
               <span hidden data-testid="player-count">{online}</span>
               <button className="btn primary start" onClick={onStart} disabled={!canStart} data-testid="start-button">
-                {canStart ? `Start match with ${online} players` : `Waiting for players (need ${MIN_PLAYERS})`}
+                {online === 1
+                  ? 'Start solo challenge'
+                  : online > 1
+                    ? `Start match with ${online} players`
+                    : 'Waiting for the first player'}
               </button>
             </Panel>
           </div>
