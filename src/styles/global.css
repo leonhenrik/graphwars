@@ -523,6 +523,28 @@ body {
   font-weight: 300;
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-mark {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
+}
+
+.brand-mark.small {
+  width: 28px;
+  height: 28px;
+}
+
+.brand-lockup.small {
+  gap: 8px;
+}
+
 .brand.small {
   font-size: 22px;
 }
@@ -712,9 +734,34 @@ body {
   border-radius: 8px;
 }
 
-.shuffle {
-  margin-top: 12px;
-  flex: none;
+.map-slot {
+  position: relative;
+}
+
+.map-regen {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  color: #e0f2fe;
+  background: rgba(10, 16, 30, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.map-regen:hover {
+  border-color: var(--accent);
+}
+
+.map-regen:active {
+  transform: rotate(-90deg);
 }
 
 .start {

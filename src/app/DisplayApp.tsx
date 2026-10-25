@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Battlefield, type ShotAnimation } from './components/Battlefield';
+import { BrandMark } from './components/BrandMark';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { Countdown } from './components/Countdown';
 import { GameOverModal } from './components/GameOverModal';
@@ -154,7 +155,12 @@ export function DisplayApp() {
   return (
     <div className="app display">
       <header className="header">
-        <h1 className="brand small">Graphwars</h1>
+        <div className="brand-lockup small">
+          <BrandMark className="brand-mark small" />
+          <h1 className="brand small">
+            Graph<span>wars</span>
+          </h1>
+        </div>
         <TurnIndicator game={game} options={view.options} busy={view.shotInFlight} firedCount={view.submitted.length} />
         <Countdown timer={view.timer} />
         <div className="header-actions">

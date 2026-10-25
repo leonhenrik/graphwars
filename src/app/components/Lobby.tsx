@@ -7,6 +7,7 @@ import type { GameOptions, MapId, MatchConfig } from '../../game/types';
 import type { MemberView } from '../../shared/protocol';
 import { drawScene } from './render';
 import { Avatar } from './Avatar';
+import { BrandMark } from './BrandMark';
 
 interface Props {
   members: MemberView[];
@@ -157,9 +158,12 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
       <div className="lobby-shell">
         <div className="lobby-grid">
           <header className="lobby-brand">
-            <h1 className="brand">
-              Graph<span>wars</span>
-            </h1>
+            <div className="brand-lockup">
+              <BrandMark />
+              <h1 className="brand">
+                Graph<span>wars</span>
+              </h1>
+            </div>
             <p className="menu-sub">Phones are the calculators, this screen is the battlefield.</p>
           </header>
 
@@ -245,29 +249,33 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
               <div className="maps" role="radiogroup" aria-label="Map">
                 {MAPS.map((map) => {
                   const selected = mapId === map.id;
+                  const regenerable = map.id === 'scatter' || map.id === 'chaos';
                   return (
-                    <button
-                      key={map.id}
-                      role="radio"
-                      aria-checked={selected}
-                      className={`map-card${selected ? ' selected' : ''}`}
-                      onClick={() => onConfigure(map.id, seed, options)}
-                    >
-                      <MapThumbnail config={{ playerCount: thumbPlayers, mapId: map.id, seed }} />
-                      <span className="map-name">{map.name}</span>
-                      <span className="map-desc">{map.description}</span>
-                    </button>
+                    <div key={map.id} className="map-slot">
+                      <button
+                        role="radio"
+                        aria-checked={selected}
+                        className={`map-card${selected ? ' selected' : ''}`}
+                        onClick={() => onConfigure(map.id, seed, options)}
+                      >
+                        <MapThumbnail config={{ playerCount: thumbPlayers, mapId: map.id, seed }} />
+                        <span className="map-name">{map.name}</span>
+                        <span className="map-desc">{map.description}</span>
+                      </button>
+                      {selected && regenerable && (
+                        <button
+                          className="map-regen"
+                          title={`New random layout (seed ${seed})`}
+                          aria-label="New random layout"
+                          onClick={() => onConfigure(mapId, Math.floor(Math.random() * 1_000_000), options)}
+                        >
+                          ↻
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
-              {(mapId === 'scatter' || mapId === 'chaos') && (
-                <button
-                  className="btn shuffle"
-                  onClick={() => onConfigure(mapId, Math.floor(Math.random() * 1_000_000), options)}
-                >
-                  🎲 New random layout (seed {seed})
-                </button>
-              )}
             </Panel>
           </div>
         </div>
