@@ -7,9 +7,12 @@ export interface Effect {
   y: number;
   color: string;
   startedAt: number;
+  /** Text that rises out of the explosion, e.g. a shot's accuracy. */
+  label?: string;
 }
 
 export const EFFECT_DURATION_MS = 900;
+export const LABEL_DURATION_MS = 1600;
 
 export interface PathLine {
   points: TrajectoryPoint[];
@@ -321,6 +324,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   // Effects
   for (const e of scene.effects) {
     const t = (scene.now - e.startedAt) / EFFECT_DURATION_MS;
+    const tl = (scene.now - e.startedAt) / LABEL_DURATION_MS;
+    if (e.label && tl >= 0 && tl <= 1) drawLabel(ctx, e, tl, px(e.x), py(e.y), scale);
     if (t < 0 || t > 1) continue;
     const cx = px(e.x);
     const cy = py(e.y);
@@ -349,6 +354,29 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
 
 function easeOut(t: number): number {
   return 1 - (1 - t) * (1 - t);
+}
+
+/** Text that flies up and fades out from an explosion. */
+function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  e: Effect,
+  t: number,
+  cx: number,
+  cy: number,
+  scale: number,
+): void {
+  const y = cy - 2.6 * scale - 4 * scale * easeOut(t);
+  ctx.save();
+  ctx.globalAlpha = 1 - t * t;
+  ctx.font = `bold ${Math.max(14, 1.5 * scale)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.strokeText(e.label as string, cx, y);
+  ctx.fillStyle = e.color;
+  ctx.fillText(e.label as string, cx, y);
+  ctx.restore();
 }
 
 function strokePath(

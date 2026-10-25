@@ -1,9 +1,10 @@
 import { findFirstCollision, obstacleTarget, soldierTarget, type CircleTarget } from './collision';
-import { parseExpression } from './expressionParser';
 import { getSoldier } from './gameState';
+import { parseExpression } from './expressionParser';
 import { computeTrajectory, isUsableTrajectory } from './trajectory';
+import { shotAccuracy } from './shotScore';
 import { advanceRound, advanceTurn, validateShooter } from './turnManager';
-import type { GameState, ShotDirection, ShotResult, Trajectory } from './types';
+import type { GameState, PlayerShotStats, ShotDirection, ShotResult, Trajectory } from './types';
 
 export type ShotAttempt = { ok: true; shot: ShotResult } | { ok: false; error: string };
 
@@ -73,12 +74,17 @@ export function simulateShot(
         outcome: 'miss',
         targetId: null,
         impact: null,
+        accuracy: null,
         end: trajectory.end,
       },
     };
   }
 
   const points = [...trajectory.points.slice(0, collision.segmentIndex + 1), collision.point];
+  const shooter = state.soldiers.find((s) => s.id === soldierId);
+  const hitSoldier = collision.target.kind === 'soldier' ? state.soldiers.find((s) => s.id === collision.target.id) : undefined;
+  const accuracy =
+    shooter && hitSoldier ? shotAccuracy(state.battlefield, shooter, hitSoldier, points, collision.point) : null;
   return {
     ok: true,
     shot: {
@@ -89,18 +95,33 @@ export function simulateShot(
       outcome: collision.target.kind === 'soldier' ? 'hit-soldier' : 'hit-obstacle',
       targetId: collision.target.id,
       impact: collision.point,
+      accuracy,
       end: trajectory.end,
     },
   };
 }
 
-/** Applies a completed shot: eliminates a hit player, then advances the turn. */
+/** Applies a completed shot: eliminates a hit player, records the shot's stats, then advances the turn. */
 export function applyShot(state: GameState, shot: ShotResult): GameState {
   const soldiers =
     shot.outcome === 'hit-soldier'
       ? state.soldiers.map((s) => (s.id === shot.targetId ? { ...s, alive: false } : s))
       : state.soldiers;
-  return advanceTurn({ ...state, soldiers });
+  return advanceTurn({ ...state, soldiers, shotStats: recordShotStats(state, [shot]) });
+}
+
+/** Adds each successful shot (one that hit another player) to its shooter's running totals. */
+export function recordShotStats(state: GameState, shots: ShotResult[]): PlayerShotStats[] {
+  const stats = state.shotStats.map((s) => ({ ...s }));
+  for (const shot of shots) {
+    if (shot.outcome !== 'hit-soldier' || shot.accuracy === null) continue;
+    const shooter = getSoldier(state, shot.shooterId);
+    const entry = stats.find((s) => s.playerId === shooter?.playerId);
+    if (!entry) continue;
+    entry.successfulShots += 1;
+    entry.accuracySum += shot.accuracy;
+  }
+  return stats;
 }
 
 export function pathLength(points: ShotResult['points']): number {
@@ -137,5 +158,5 @@ export function roundEliminations(shots: ShotResult[]): Set<string> {
 export function applyRound(state: GameState, shots: ShotResult[]): GameState {
   const hit = roundEliminations(shots);
   const soldiers = state.soldiers.map((s) => (hit.has(s.id) ? { ...s, alive: false } : s));
-  return advanceRound({ ...state, soldiers });
+  return advanceRound({ ...state, soldiers, shotStats: recordShotStats(state, shots) });
 }

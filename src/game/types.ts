@@ -76,6 +76,14 @@ export interface GameState {
   turn: TurnState;
   status: MatchStatus;
   winnerId: PlayerId | null;
+  /** One entry per player: successful (hitting a player) shots and the sum of their accuracy percentages. */
+  shotStats: PlayerShotStats[];
+}
+
+export interface PlayerShotStats {
+  playerId: PlayerId;
+  successfulShots: number;
+  accuracySum: number;
 }
 
 export interface TrajectoryPoint {
@@ -105,5 +113,7 @@ export interface ShotResult {
   outcome: ShotOutcome;
   targetId: string | null;
   impact: TrajectoryPoint | null;
+  /** On a hit: 0-100, how close the shot came to the ideal (shortest obstacle-avoiding) path. */
+  accuracy: number | null;
   end: TrajectoryEnd;
 }

@@ -32,6 +32,15 @@ describe('simulation – hits', () => {
     expect(alive(next, 'b')).toBe(false);
     expect(alive(next, 'c')).toBe(true);
     expect(alive(next, 'a')).toBe(true);
+    const stat = next.shotStats.find((x) => x.playerId === 1)!;
+    expect(stat.successfulShots).toBe(1);
+    expect(stat.accuracySum).toBe(shot.accuracy);
+  });
+
+  it('does not count obstacle hits as successful shots', () => {
+    const s = makeState([soldier('a', 1, -10, 0), soldier('b', 2, 10, 0)], [{ id: 'rock', x: 0, y: 0, radius: 2 }]);
+    const next = applyShot(s, shoot(s, 'a', '0'));
+    expect(next.shotStats.every((x) => x.successfulShots === 0)).toBe(true);
   });
 
   it('stops at an obstacle without eliminating anyone', () => {

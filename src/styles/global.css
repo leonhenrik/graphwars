@@ -366,6 +366,30 @@ body {
   color: var(--muted);
 }
 
+.stats-table {
+  width: 100%;
+  margin: 0 0 18px;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stats-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.stats-table td:nth-child(n + 2),
+.stats-table th:nth-child(n + 2) {
+  text-align: right;
+}
+
 .teams {
   flex-wrap: wrap;
 }

@@ -28,6 +28,7 @@ export function createInitialState(config: MatchConfig = DEFAULT_CONFIG): GameSt
     turn: { currentPlayerId: 1, turnNumber: 1, hasFired: false },
     status: 'playing',
     winnerId: null,
+    shotStats: players.map((p) => ({ playerId: p.id, successfulShots: 0, accuracySum: 0 })),
   };
 }
 

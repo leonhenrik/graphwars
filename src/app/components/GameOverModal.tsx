@@ -20,6 +20,29 @@ export function GameOverModal({
           {winner ? `${winner.name} wins!` : 'Draw'}
         </h2>
         <p>The last player standing takes the match.</p>
+        <table className="stats-table" data-testid="shot-stats">
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Successful shots</th>
+              <th>Average accuracy</th>
+            </tr>
+          </thead>
+          <tbody>
+            {game.players.map((p) => {
+              const member = members.find((m) => m.playerId === p.id);
+              const stats = game.shotStats.find((s) => s.playerId === p.id);
+              const shots = stats?.successfulShots ?? 0;
+              return (
+                <tr key={p.id}>
+                  <td style={{ color: member?.color ?? p.color }}>{member?.name ?? p.name}</td>
+                  <td>{shots}</td>
+                  <td>{shots > 0 ? `${Math.round((stats?.accuracySum ?? 0) / shots)}%` : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
         <div className="button-row">
           <button className="btn" onClick={onLobby}>
             Back to lobby

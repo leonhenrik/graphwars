@@ -5,7 +5,7 @@ import { Countdown } from './components/Countdown';
 import { GameOverModal } from './components/GameOverModal';
 import { Lobby } from './components/Lobby';
 import { PlayerChips } from './components/PlayerChips';
-import type { Effect, PathLine } from './components/render';
+import { LABEL_DURATION_MS, type Effect, type PathLine } from './components/render';
 import { TurnIndicator } from './components/TurnIndicator';
 import { useSocket } from '../client/useSocket';
 import { defaultDirection, getPlayerSoldier, getSoldier } from '../game/gameState';
@@ -73,13 +73,14 @@ export function DisplayApp() {
           const target = getSoldier(current.game, shot.targetId);
           const targetColor = current.members.find((m) => m.playerId === target?.playerId)?.color ?? '#fff';
           if (target) {
-            added.push({ id: nextEffectId.current++, kind: 'elimination', x: target.x, y: target.y, color: targetColor, startedAt: now });
+            const label = shot.accuracy === null ? undefined : `${shot.accuracy}%`;
+            added.push({ id: nextEffectId.current++, kind: 'elimination', x: target.x, y: target.y, color: targetColor, startedAt: now, label });
           }
         } else if (shot.outcome === 'hit-obstacle' && shot.impact) {
           added.push({ id: nextEffectId.current++, kind: 'impact', x: shot.impact.x, y: shot.impact.y, color, startedAt: now });
         }
       }
-      setEffects((prev) => [...prev.filter((e) => now - e.startedAt < 1000), ...added]);
+      setEffects((prev) => [...prev.filter((e) => now - e.startedAt < LABEL_DURATION_MS), ...added]);
       setTraces(anim.shots.map(({ shot, color }) => ({ points: shot.points, color })));
       setAnimation(null);
       send({ type: 'shotDone', id });
