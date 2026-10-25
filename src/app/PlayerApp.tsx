@@ -4,7 +4,7 @@ import { Calculator } from './components/Calculator';
 import { Countdown } from './components/Countdown';
 import { SelfieCard } from './components/SelfieCard';
 import { useSocket } from '../client/useSocket';
-import { DEFAULT_EXPRESSION } from '../game/constants';
+import { DEFAULT_EXPRESSION, MIN_PLAYERS } from '../game/constants';
 import type { ShotDirection } from '../game/types';
 import type { PlayerView, ServerMessage } from '../shared/protocol';
 
@@ -32,6 +32,7 @@ function rulesSummary(view: PlayerView): string {
   const parts = [
     options.shotMode === 'simultaneous' ? 'All at once' : 'One after another',
     options.preview ? 'preview on' : 'preview off',
+    options.playerMovement ? 'movement on' : 'movement off',
     options.countdownEnabled ? `${options.countdownSeconds}s countdown` : 'no countdown',
   ];
   return parts.join(' · ');
@@ -40,7 +41,17 @@ function rulesSummary(view: PlayerView): string {
 function statusOf(view: PlayerView): { text: string; tone: 'go' | 'wait' | 'out' } {
   const { you } = view;
   const simultaneous = view.options.shotMode === 'simultaneous';
-  if (view.phase === 'lobby') return { text: `Waiting for the host to start (${view.playerCount} joined)`, tone: 'wait' };
+  if (view.phase === 'lobby') {
+    return {
+      text:
+        you.playerId === 1
+          ? view.playerCount >= MIN_PLAYERS
+            ? `${view.playerCount} players joined — ready to start`
+            : `Waiting for players (${view.playerCount}/${MIN_PLAYERS})`
+          : `Waiting for the host to start (${view.playerCount} joined)`,
+      tone: 'wait',
+    };
+  }
   if (view.phase === 'over') {
     const text =
       view.winnerId === you.playerId ? 'You won! 🎉' : view.winnerId !== null ? `${view.winnerName ?? `Player ${view.winnerId}`} won` : 'Draw — nobody is left';
@@ -155,6 +166,23 @@ export function PlayerApp() {
         )}
       </header>
       {view.phase === 'lobby' && <div className="phone-rules">{rulesSummary(view)}</div>}
+      {view.phase === 'lobby' && you.playerId === 1 && (
+        <div className="phone-lobby-actions">
+          <p>
+            {view.playerCount >= MIN_PLAYERS
+              ? `${view.playerCount} players ready`
+              : `Waiting for ${MIN_PLAYERS - view.playerCount} more player to join`}
+          </p>
+          <button
+            className="btn primary"
+            onClick={() => send({ type: 'start' })}
+            disabled={!connected || view.playerCount < MIN_PLAYERS}
+            data-testid="phone-start-button"
+          >
+            {view.playerCount >= MIN_PLAYERS ? 'Start game' : `Need at least ${MIN_PLAYERS} players`}
+          </button>
+        </div>
+      )}
       {view.phase === 'lobby' && (
         <SelfieCard
           you={you}
@@ -180,6 +208,24 @@ export function PlayerApp() {
       <div id="fn-error" className="fn-error" role="alert" data-testid="expression-error">
         {canAct ? view.draftError : null}
       </div>
+      {view.phase === 'over' && you.playerId === 1 && (
+        <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="phone-gameover-title" data-testid="phone-game-over">
+          <div className="modal phone-gameover-modal">
+            <h2 id="phone-gameover-title">
+              {view.winnerName ? `${view.winnerName} wins!` : 'Draw'}
+            </h2>
+            <p>Play another round?</p>
+            <div className="phone-gameover-actions">
+              <button className="btn" onClick={() => send({ type: 'lobby' })}>
+                Back to lobby
+              </button>
+              <button className="btn primary" onClick={() => send({ type: 'restart' })} autoFocus>
+                Play Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {view.notice && (
         <div className={`message inline ${view.notice.kind}`} role="status" aria-live="polite" data-testid="message">
           {view.notice.text}

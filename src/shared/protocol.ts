@@ -137,6 +137,7 @@ function parseOptions(raw: unknown): GameOptions | null {
   if (
     !SHOT_MODES.includes(o.shotMode as ShotMode) ||
     typeof o.preview !== 'boolean' ||
+    typeof o.playerMovement !== 'boolean' ||
     typeof o.countdownEnabled !== 'boolean' ||
     typeof o.countdownSeconds !== 'number' ||
     !Number.isInteger(o.countdownSeconds) ||
@@ -148,6 +149,7 @@ function parseOptions(raw: unknown): GameOptions | null {
   return {
     shotMode: o.shotMode as ShotMode,
     preview: o.preview,
+    playerMovement: o.playerMovement,
     countdownEnabled: o.countdownEnabled,
     countdownSeconds: o.countdownSeconds,
   };

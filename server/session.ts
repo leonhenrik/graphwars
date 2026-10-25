@@ -3,6 +3,7 @@ import { DEFAULT_OPTIONS, MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS } from '../src
 import { createInitialState, defaultDirection, getPlayerSoldier } from '../src/game/gameState';
 import { describeShot } from '../src/game/messages';
 import { applyRound, applyShot, buildTrajectory, roundEliminations, simulateShot } from '../src/game/simulation';
+import { movePlayersClockwise } from '../src/game/movement';
 import { advanceRound, advanceTurn, markFired } from '../src/game/turnManager';
 import type { GameOptions, GameState, MapId, PlayerId, ShotDirection } from '../src/game/types';
 import type {
@@ -200,23 +201,10 @@ export class Session {
         this.broadcast();
         return;
       case 'start':
-        if (this.phase !== 'lobby') return;
-        // Phones that are offline at this point do not take part.
-        this.dropOfflineMembers();
-        if (this.members.length < MIN_PLAYERS) {
-          this.setNotice('error', `Waiting for players: at least ${MIN_PLAYERS} phones must join.`);
-          return;
-        }
-        this.startMatchWith({ playerCount: this.members.length, mapId: this.config.mapId, seed: this.config.seed });
+        this.startMatch();
         return;
       case 'restart': {
-        if (this.phase === 'lobby' || !this.game) return;
-        const config = { ...this.game.config };
-        if (config.mapId === 'scatter' || config.mapId === 'chaos') {
-          config.seed = Math.floor(Math.random() * 1_000_000);
-          this.config = { mapId: config.mapId, seed: config.seed };
-        }
-        this.startMatchWith(config);
+        this.restartMatch();
         return;
       }
       case 'lobby':
@@ -250,6 +238,18 @@ export class Session {
     }
     if (message.type === 'name') {
       this.setName(member, message.name);
+      return;
+    }
+    if (message.type === 'start') {
+      if (member.playerId === 1) this.startMatch();
+      return;
+    }
+    if (message.type === 'lobby') {
+      if (this.phase === 'over' && member.playerId === 1) this.returnToLobby();
+      return;
+    }
+    if (message.type === 'restart') {
+      if (this.phase === 'over' && member.playerId === 1) this.restartMatch();
       return;
     }
     if (!this.canAct(member)) return;
@@ -369,7 +369,7 @@ export class Session {
     const next = this.simultaneous
       ? applyRound(game, pending.shots.map((f) => f.shot))
       : applyShot(game, (pending.shots[0] as FiredShot).shot);
-    this.game = next;
+    this.game = this.withRoundMovement(game, next);
     this.drafts.clear();
     this.submissions.clear();
 
@@ -418,13 +418,13 @@ export class Session {
         return;
       }
       this.setNotice('warning', `${reason} Nobody fired.`, false);
-      this.game = advanceRound(game);
+      this.game = this.withRoundMovement(game, advanceRound(game));
     } else {
       const member = this.members.find((m) => m.playerId === game.turn.currentPlayerId);
       const draft = member ? this.drafts.get(member.playerId) : undefined;
       if (autoFire && member && draft && this.fire(member, draft.expression, draft.direction, true)) return;
       this.setNotice('warning', `${this.nameOf(game.turn.currentPlayerId)}'s turn was skipped. ${reason}`, false);
-      this.game = advanceTurn(game);
+      this.game = this.withRoundMovement(game, advanceTurn(game));
     }
     this.drafts.clear();
     this.startCountdown();
@@ -442,6 +442,46 @@ export class Session {
     this.notice = null;
     this.startCountdown();
     this.broadcast();
+  }
+
+  private startMatch(): void {
+    if (this.phase !== 'lobby') return;
+    this.dropOfflineMembers();
+    if (this.members.length < MIN_PLAYERS) {
+      this.setNotice('error', `Waiting for players: at least ${MIN_PLAYERS} phones must join.`);
+      return;
+    }
+    this.startMatchWith({ playerCount: this.members.length, mapId: this.config.mapId, seed: this.config.seed });
+  }
+
+  private returnToLobby(): void {
+    this.cancelPending();
+    this.stopCountdown();
+    this.phase = 'lobby';
+    this.game = null;
+    this.drafts.clear();
+    this.submissions.clear();
+    this.notice = null;
+    this.dropOfflineMembers();
+    this.broadcast();
+  }
+
+  private withRoundMovement(previous: GameState, next: GameState): GameState {
+    const roundCompleted =
+      this.simultaneous || next.turn.currentPlayerId <= previous.turn.currentPlayerId;
+    return this.options.playerMovement && roundCompleted && next.status === 'playing'
+      ? movePlayersClockwise(next)
+      : next;
+  }
+
+  private restartMatch(): void {
+    if (this.phase === 'lobby' || !this.game) return;
+    const config = { ...this.game.config };
+    if (config.mapId === 'scatter' || config.mapId === 'chaos') {
+      config.seed = Math.floor(Math.random() * 1_000_000);
+      this.config = { mapId: config.mapId, seed: config.seed };
+    }
+    this.startMatchWith(config);
   }
 
   private cancelPending(): void {

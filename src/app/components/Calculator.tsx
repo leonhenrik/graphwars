@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { MAX_EXPRESSION_LENGTH } from '../../game/constants';
 
 /** A short tick for every calculator tap (no-op where the device has no vibration). */
 function buzz(): void {
@@ -40,6 +41,9 @@ const KEYS: Key[] = [
   fn('log'), fn('ln'), fn('exp'), { label: 'π', insert: 'pi', kind: 'op' }, { label: 'e', kind: 'op' },
 ];
 
+const MAX_FUNCTION_FONT_SIZE = 18;
+const MIN_FUNCTION_FONT_SIZE = 6;
+
 /** The on-phone calculator: a display of y = f(x), a keypad, the direction flip and the fire button. */
 export function Calculator({
   value,
@@ -54,6 +58,35 @@ export function Calculator({
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
+  const [fontSize, setFontSize] = useState(MAX_FUNCTION_FONT_SIZE);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    const context = document.createElement('canvas').getContext('2d');
+    if (!input || !context) return;
+
+    const fitFunction = () => {
+      const style = window.getComputedStyle(input);
+      const available = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      if (available <= 0) return;
+      context.font = `${style.fontWeight} ${MAX_FUNCTION_FONT_SIZE}px ${style.fontFamily}`;
+      const letterSpacing = parseFloat(style.letterSpacing) || MAX_FUNCTION_FONT_SIZE * 0.02;
+      const textWidth =
+        context.measureText(value).width + Math.max(0, value.length - 1) * letterSpacing;
+      const size =
+        textWidth <= available
+          ? MAX_FUNCTION_FONT_SIZE
+          : Math.max(
+              MIN_FUNCTION_FONT_SIZE,
+              Math.floor((MAX_FUNCTION_FONT_SIZE * (available - 2)) / textWidth),
+            );
+      setFontSize(size);
+    };
+
+    fitFunction();
+    window.addEventListener('resize', fitFunction);
+    return () => window.removeEventListener('resize', fitFunction);
+  }, [value]);
 
   // Restore the caret after React re-renders the controlled input.
   useLayoutEffect(() => {
@@ -114,6 +147,7 @@ export function Calculator({
           aria-label="y = f(x)"
           ref={inputRef}
           className={`fn-input${error ? ' invalid' : ''}`}
+          style={{ fontSize: `${fontSize}px` }}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
@@ -122,7 +156,7 @@ export function Calculator({
           spellCheck={false}
           autoComplete="off"
           autoCapitalize="off"
-          maxLength={200}
+          maxLength={MAX_EXPRESSION_LENGTH}
           aria-invalid={error !== null}
           aria-describedby="fn-error"
           placeholder="e.g. sin(x)"

@@ -223,6 +223,16 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                 onChange={(v) => update({ preview: v === 'on' })}
               />
               <Segmented
+                testId="rule-player-movement"
+                label="Player Movement"
+                value={options.playerMovement ? 'on' : 'off'}
+                choices={[
+                  { value: 'off', label: 'Off' },
+                  { value: 'on', label: 'On' },
+                ]}
+                onChange={(v) => update({ playerMovement: v === 'on' })}
+              />
+              <Segmented
                 testId="rule-countdown"
                 label="Countdown"
                 value={options.countdownEnabled ? 'on' : 'off'}

@@ -229,6 +229,7 @@ body {
 
 .fn-input {
   width: 100%;
+  min-width: 0;
   padding: 7px 10px;
   background: #0b1220;
   color: var(--text);
@@ -364,6 +365,40 @@ body {
 .modal p {
   margin: 0 0 18px;
   color: var(--muted);
+}
+
+.phone-gameover-modal {
+  width: min(420px, calc(100vw - 32px));
+  min-width: 0;
+}
+
+.phone-gameover-modal .btn {
+  width: 100%;
+  min-height: 48px;
+}
+
+.phone-gameover-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.phone-lobby-actions {
+  padding: 12px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.phone-lobby-actions p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.phone-lobby-actions .btn {
+  width: 100%;
+  min-height: 48px;
 }
 
 .stats-table {

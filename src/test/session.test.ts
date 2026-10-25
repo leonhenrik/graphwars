@@ -57,7 +57,7 @@ function addPlayer(token: string | null = null) {
 }
 
 /** The option set these tests were written against; the app's own defaults are covered separately. */
-const TEST_OPTIONS: GameOptions = { shotMode: 'turns', preview: true, countdownEnabled: false, countdownSeconds: 30 };
+const TEST_OPTIONS: GameOptions = { shotMode: 'turns', preview: true, playerMovement: false, countdownEnabled: false, countdownSeconds: 30 };
 
 function configure(options: Partial<GameOptions> = {}, mapId: MapId = 'classic', seed = 1) {
   session.handle(display, { type: 'configure', mapId, seed, options: { ...TEST_OPTIONS, ...options } });
@@ -190,17 +190,31 @@ describe('lobby', () => {
     expect(seventh.messages.at(-1)).toEqual({ type: 'rejected', text: expect.stringContaining('full') });
     expect(display.display().members).toHaveLength(6);
   });
+
+  it('allows only player 1 to start once the minimum number of players have joined', () => {
+    const p1 = addPlayer();
+    session.handle(p1, { type: 'start' });
+    expect(display.display().phase).toBe('lobby');
+
+    const p2 = addPlayer();
+    session.handle(p2, { type: 'start' });
+    expect(display.display().phase).toBe('lobby');
+
+    session.handle(p1, { type: 'start' });
+    expect(display.display().phase).toBe('playing');
+    expect(display.display().game!.players).toHaveLength(2);
+  });
 });
 
 describe('game options', () => {
-  it('defaults to turns, preview on, countdown off', () => {
-    expect(display.display().options).toEqual({ shotMode: 'simultaneous', preview: false, countdownEnabled: true, countdownSeconds: 30 });
+  it('defaults to simultaneous shots, preview off, movement off, and a 30-second countdown', () => {
+    expect(display.display().options).toEqual({ shotMode: 'simultaneous', preview: false, playerMovement: false, countdownEnabled: true, countdownSeconds: 30 });
   });
 
   it('are configured in the lobby, shown to phones, and locked once the match runs', () => {
     const phone = addPlayer();
-    configure({ shotMode: 'simultaneous', preview: false, countdownEnabled: true, countdownSeconds: 45 }, 'scatter', 9);
-    const expected = { shotMode: 'simultaneous', preview: false, countdownEnabled: true, countdownSeconds: 45 };
+    configure({ shotMode: 'simultaneous', preview: false, playerMovement: true, countdownEnabled: true, countdownSeconds: 45 }, 'scatter', 9);
+    const expected = { shotMode: 'simultaneous', preview: false, playerMovement: true, countdownEnabled: true, countdownSeconds: 45 };
     expect(display.display().options).toEqual(expected);
     expect(phone.player().options).toEqual(expected);
     expect(display.display().mapId).toBe('scatter');
@@ -209,7 +223,41 @@ describe('game options', () => {
     session.handle(display, { type: 'start' });
     configure({ shotMode: 'turns' });
     expect(display.display().options.shotMode).toBe('simultaneous');
+    expect(display.display().options.playerMovement).toBe(true);
     expect(display.display().mapId).toBe('scatter');
+  });
+
+  it('moves players only after a complete turn-based round', () => {
+    startWith(3, { playerMovement: true });
+    const initial = display.display().game!.soldiers.map(({ x, y }) => ({ x, y }));
+
+    session.handle(display, { type: 'skipTurn' });
+    session.handle(display, { type: 'skipTurn' });
+    expect(display.display().game!.soldiers.map(({ x, y }) => ({ x, y }))).toEqual(initial);
+
+    session.handle(display, { type: 'skipTurn' });
+    expect(display.display().game!.soldiers.map(({ x, y }) => ({ x, y }))).not.toEqual(initial);
+  });
+
+  it('lets only player 1 return the finished match to the lobby', () => {
+    const [p1, p2] = startWith(2);
+    const witness = hit(1, 2);
+    session.handle(p1, { type: 'fire', expression: witness.expression, direction: witness.direction });
+    finishShots();
+    expect(display.display().phase).toBe('over');
+
+    session.handle(p2, { type: 'lobby' });
+    expect(display.display().phase).toBe('over');
+    session.handle(p1, { type: 'lobby' });
+    expect(display.display().phase).toBe('lobby');
+    expect(display.display().game).toBeNull();
+  });
+
+  it('moves players after a simultaneous round with no submitted shots', () => {
+    startWith(3, { shotMode: 'simultaneous', playerMovement: true });
+    const initial = display.display().game!.soldiers.map(({ x, y }) => ({ x, y }));
+    session.handle(display, { type: 'skipTurn' });
+    expect(display.display().game!.soldiers.map(({ x, y }) => ({ x, y }))).not.toEqual(initial);
   });
 
   it('keeps the options when restarting', () => {
@@ -328,7 +376,7 @@ describe('turn-by-turn mode', () => {
     expect(order).toEqual([1, 2, 3, 1]);
   });
 
-  it('a hit eliminates, the last player standing wins, and the host can play again or go back to the lobby', () => {
+  it('a hit ends the match, and only the first player can restart from their phone', () => {
     const [p1, p2] = startWith(2);
     const w = hit(1, 2);
     session.handle(p1, { type: 'fire', expression: w.expression, direction: w.direction });
@@ -344,7 +392,10 @@ describe('turn-by-turn mode', () => {
     expect(p2.player().you.alive).toBe(false);
     expect(p2.player().canAct).toBe(false);
 
-    session.handle(display, { type: 'restart' });
+    session.handle(p2, { type: 'restart' });
+    expect(display.display().phase).toBe('over');
+
+    session.handle(p1, { type: 'restart' });
     expect(display.display().phase).toBe('playing');
     expect(display.display().game!.soldiers.every((s) => s.alive)).toBe(true);
     expect(display.display().notice).toBeNull();
@@ -800,7 +851,7 @@ describe('phone support', () => {
 });
 
 describe('parseClientMessage', () => {
-  const options = { shotMode: 'turns', preview: true, countdownEnabled: false, countdownSeconds: 30 };
+  const options = { shotMode: 'turns', preview: true, playerMovement: false, countdownEnabled: false, countdownSeconds: 30 };
 
   it('accepts well-formed messages', () => {
     expect(parseClientMessage({ type: 'fire', expression: 'x', direction: 1 })).toEqual({
@@ -849,6 +900,7 @@ describe('parseClientMessage', () => {
     { type: 'configure', mapId: 'classic', seed: 1 },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, shotMode: 'chaos' } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, preview: 'yes' } },
+    { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovement: undefined } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, countdownSeconds: 4 } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, countdownSeconds: 301 } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, countdownSeconds: 7.5 } },

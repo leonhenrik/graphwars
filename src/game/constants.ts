@@ -23,6 +23,7 @@ export const COUNTDOWN_MAX_SECONDS = 300;
 export const DEFAULT_OPTIONS: GameOptions = {
   shotMode: 'simultaneous',
   preview: false,
+  playerMovement: false,
   countdownEnabled: true,
   countdownSeconds: 30,
 };

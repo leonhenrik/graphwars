@@ -64,6 +64,8 @@ export interface GameOptions {
   shotMode: ShotMode;
   /** Show the entered curve on the big screen while a player types. */
   preview: boolean;
+  /** Move living players a small clockwise step after each completed round. */
+  playerMovement: boolean;
   countdownEnabled: boolean;
   countdownSeconds: number;
 }
