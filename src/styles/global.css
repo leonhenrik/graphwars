@@ -433,22 +433,23 @@ body {
 
 .tool-row {
   display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 8px;
+  margin: 16px 0;
 }
 
 .tool-row .btn {
-  padding: 8px 12px;
+  padding: 14px 12px;
+  font-size: 15px;
 }
 
 .tool-row .btn.clear {
-  flex: 0 0 76px;
+  flex: 0 0 88px;
   color: #fca5a5;
 }
 
 .tool-row .btn.cursor {
-  flex: 0 0 44px;
-  padding: 8px 0;
+  flex: 0 0 56px;
+  padding: 14px 0;
 }
 
 /* ---- Lobby (laptop menu) ---- */
