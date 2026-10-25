@@ -90,6 +90,8 @@ export interface PlayerView {
   turnDirection: ShotDirection;
   shotInFlight: boolean;
   winnerId: PlayerId | null;
+  /** Name of the winner, shown in the phone's end-of-match status. */
+  winnerName: string | null;
   /** Changes whenever a new match starts, so the phone can reset per-match settings (e.g. its x direction). */
   matchId: number;
   draftError: string | null;
@@ -109,7 +111,9 @@ export type ClientMessage =
   | { type: 'draft'; expression: string; direction: ShotDirection }
   | { type: 'fire'; expression: string; direction: ShotDirection }
   /** Lobby only: set (JPEG data URL) or remove (null) the player's selfie. */
-  | { type: 'photo'; image: string | null };
+  | { type: 'photo'; image: string | null }
+  /** Lobby only: choose the name shown on the big screen and in the match messages. */
+  | { type: 'name'; name: string };
 
 export type ServerMessage =
   | { type: 'welcome'; token: string }
@@ -119,6 +123,7 @@ export type ServerMessage =
   | { type: 'rejected'; text: string };
 
 export const MAX_MESSAGE_EXPRESSION = 500;
+export const MAX_PLAYER_NAME = 16;
 /** Selfies travel as base64 JPEG data URLs; this is the longest accepted string (about 22 KB of image). */
 export const MAX_PHOTO_CHARS = 32_000;
 const JPEG_DATA_URL = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
@@ -181,6 +186,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return typeof m.image === 'string' && m.image.length <= MAX_PHOTO_CHARS && JPEG_DATA_URL.test(m.image)
         ? { type: 'photo', image: m.image }
         : null;
+    case 'name': {
+      const name = typeof m.name === 'string' ? m.name.trim() : '';
+      return name.length > 0 && name.length <= MAX_PLAYER_NAME ? { type: 'name', name } : null;
+    }
     case 'draft':
     case 'fire':
       return expression(m.expression) && direction(m.direction)

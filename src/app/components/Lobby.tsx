@@ -63,7 +63,7 @@ function JoinCard({ urls }: { urls: string[] }) {
       return;
     }
     let cancelled = false;
-    QRCode.toDataURL(url, { margin: 1, width: 240, color: { dark: '#0b1220', light: '#ffffff' } })
+    QRCode.toDataURL(url, { margin: 1, width: 960, color: { dark: '#0b1220', light: '#ffffff' } })
       .then((data) => !cancelled && setQr(data))
       .catch(() => !cancelled && setQr(null));
     return () => {
@@ -76,7 +76,7 @@ function JoinCard({ urls }: { urls: string[] }) {
   }
   return (
     <div className="join-card" data-testid="join-card">
-      {qr && <img className="qr" src={qr} alt={`QR code for ${url}`} width={150} height={150} />}
+      {qr && <img className="qr" src={qr} alt={`QR code for ${url}`} />}
       <div className="join-text">
         <div className="join-steps">Scan with your phone camera, or open</div>
         <div className="join-url" data-testid="join-url">{url}</div>
@@ -112,14 +112,12 @@ function Panel({ title, step, children, className = '' }: { title: string; step?
 
 function Segmented<T extends string>({
   label,
-  hint,
   value,
   choices,
   onChange,
   testId,
 }: {
   label: string;
-  hint: string;
   value: T;
   choices: Array<{ value: T; label: string }>;
   onChange: (value: T) => void;
@@ -143,7 +141,6 @@ function Segmented<T extends string>({
           ))}
         </div>
       </div>
-      <p className="rule-hint">{hint}</p>
     </div>
   );
 }
@@ -154,19 +151,18 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
   const thumbPlayers = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, online));
   const canStart = online >= MIN_PLAYERS;
   const update = (patch: Partial<GameOptions>) => onConfigure(mapId, seed, { ...options, ...patch });
-  const simultaneous = options.shotMode === 'simultaneous';
 
   return (
     <div className="lobby-page" data-testid="lobby">
       <div className="lobby-shell">
-        <header className="lobby-hero">
-          <h1 className="brand">
-            Graph<span>wars</span>
-          </h1>
-          <p className="menu-sub">Math artillery for up to six players. Phones are the calculators, this screen is the battlefield.</p>
-        </header>
-
         <div className="lobby-grid">
+          <header className="lobby-brand">
+            <h1 className="brand">
+              Graph<span>wars</span>
+            </h1>
+            <p className="menu-sub">Phones are the calculators, this screen is the battlefield.</p>
+          </header>
+
           <div className="lobby-col">
             <Panel title="Join with your phone" step="1">
               <JoinCard urls={joinUrls} />
@@ -182,7 +178,7 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                     style={{ ['--c' as string]: m.color }}
                     title={m.connected ? undefined : 'Phone disconnected'}
                   >
-                    <Avatar member={m} size={34}>
+                    <Avatar member={m} size={60}>
                       {m.playerId}
                     </Avatar>
                     {m.name}
@@ -191,8 +187,13 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                 ))}
               </div>
               <span hidden data-testid="player-count">{online}</span>
+              <button className="btn primary start" onClick={onStart} disabled={!canStart} data-testid="start-button">
+                {canStart ? `Start match with ${online} players` : `Waiting for players (need ${MIN_PLAYERS})`}
+              </button>
             </Panel>
+          </div>
 
+          <div className="lobby-col">
             <Panel title="Rules" step="3">
               <Segmented
                 testId="rule-mode"
@@ -202,11 +203,6 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                   { value: 'turns', label: 'One after another' },
                   { value: 'simultaneous', label: 'All at once' },
                 ]}
-                hint={
-                  simultaneous
-                    ? 'Everyone enters a function in the same round.'
-                    : 'Players take turns. The shot is animated, then the next player is up.'
-                }
                 onChange={(shotMode) => update({ shotMode })}
               />
               <Segmented
@@ -217,11 +213,6 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                   { value: 'on', label: 'On' },
                   { value: 'off', label: 'Off' },
                 ]}
-                hint={
-                  options.preview
-                    ? 'The big screen draws the curve while a player types.'
-                    : 'No preview: players have to trust their maths.'
-                }
                 onChange={(v) => update({ preview: v === 'on' })}
               />
               <Segmented
@@ -232,13 +223,6 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                   { value: 'off', label: 'Off' },
                   { value: 'on', label: 'On' },
                 ]}
-                hint={
-                  options.countdownEnabled
-                    ? simultaneous
-                      ? 'When time runs out, only the shots already fired are resolved.'
-                      : 'When time runs out, the player loses their turn.'
-                    : 'Take as long as you like.'
-                }
                 onChange={(v) => update({ countdownEnabled: v === 'on' })}
               />
               <div className={`slider-row${options.countdownEnabled ? '' : ' disabled'}`}>
@@ -256,9 +240,7 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                 <span className="slider-value">{options.countdownSeconds}s</span>
               </div>
             </Panel>
-          </div>
 
-          <div className="lobby-col">
             <Panel title="Map" step="4" className="maps-panel">
               <div className="maps" role="radiogroup" aria-label="Map">
                 {MAPS.map((map) => {
@@ -291,9 +273,6 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
         </div>
 
         {notice && <div className="message error" role="status">{notice}</div>}
-        <button className="btn primary start" onClick={onStart} disabled={!canStart} data-testid="start-button">
-          {canStart ? `Start match with ${online} players` : `Waiting for players (need ${MIN_PLAYERS})`}
-        </button>
       </div>
     </div>
   );

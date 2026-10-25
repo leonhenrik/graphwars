@@ -379,8 +379,8 @@ body {
 .keypad {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .key {
@@ -450,7 +450,7 @@ body {
 /* ---- Lobby (laptop menu) ---- */
 .lobby-page {
   min-height: 100%;
-  padding: 44px 40px 64px;
+  padding: 28px 8px 40px;
   overflow-y: auto;
   background:
     radial-gradient(900px 500px at 12% -10%, rgba(56, 189, 248, 0.18), transparent 60%),
@@ -460,7 +460,7 @@ body {
 }
 
 .lobby-shell {
-  width: min(1240px, 100%);
+  width: 88%;
   margin: 0 auto;
 }
 
@@ -475,8 +475,8 @@ body {
 }
 
 .lobby-hero {
-  margin-bottom: 40px;
-  text-align: center;
+  margin-bottom: 22px;
+  text-align: left;
 }
 
 .brand {
@@ -505,20 +505,25 @@ body {
 
 .lobby-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 36px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.lobby-brand {
+  align-self: center;
+  text-align: left;
 }
 
 .lobby-col {
   display: flex;
   flex-direction: column;
-  gap: 36px;
+  gap: 18px;
   min-width: 0;
 }
 
 .panel {
-  padding: 28px 32px 32px;
+  padding: 18px 20px 20px;
   background: rgba(19, 28, 49, 0.82);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -530,8 +535,8 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 22px;
-  font-size: 15px;
+  margin: 0 0 14px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -587,7 +592,7 @@ body {
 }
 
 .rule {
-  padding: 18px 0 20px;
+  padding: 6px 0;
   border-bottom: 1px solid rgba(38, 51, 79, 0.7);
 }
 
@@ -600,24 +605,18 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 14px;
+  gap: 6px 14px;
 }
 
 .rule-label {
   font-weight: 600;
 }
 
-.rule-hint {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .slider-row {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .slider-row input[type='range'] {
@@ -639,7 +638,7 @@ body {
 .maps {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 20px;
+  gap: 12px;
 }
 
 .map-card {
@@ -692,7 +691,7 @@ body {
 .start {
   display: block;
   width: 100%;
-  margin-top: 40px;
+  margin-top: 14px;
   padding: 18px;
   font-size: 20px;
   letter-spacing: 0.02em;
@@ -714,17 +713,16 @@ body {
 }
 
 .lobby-page .message {
-  margin-top: 28px;
+  margin-top: 14px;
 }
 
 @media (max-width: 900px) {
   .lobby-grid {
     grid-template-columns: 1fr;
-    gap: 24px;
   }
 
-  .lobby-col {
-    gap: 24px;
+  .lobby-brand {
+    align-self: start;
   }
 
   .brand {
@@ -864,11 +862,12 @@ body {
 .avatar {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 14px 4px 4px;
+  gap: 12px;
+  padding: 6px 22px 6px 6px;
   background: color-mix(in srgb, var(--c) 18%, #0b1220);
   border: 2px solid var(--c);
   border-radius: 999px;
+  font-size: 18px;
   font-weight: 600;
   animation: pop 0.3s ease-out;
 }
@@ -912,6 +911,23 @@ body {
   min-width: 0;
 }
 
+.name-form {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  color: inherit;
+  font: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 .selfie-hint {
   margin: 0 0 10px;
   color: var(--muted);
@@ -933,13 +949,15 @@ body {
 
 .join-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 26px;
-  flex-wrap: wrap;
+  gap: 16px;
+  text-align: center;
 }
 
 .qr {
-  padding: 4px;
+  width: 100%;
+  max-width: 360px;
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);

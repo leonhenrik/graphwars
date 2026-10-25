@@ -34,6 +34,8 @@ interface Member {
   photo: Buffer | null;
   /** Unique per photo that was set; 0 when there is none. Used as a cache-busting version in the photo URL. */
   photoRev: number;
+  /** Custom name chosen on the phone (lobby only). null means the default "Player N". */
+  name: string | null;
   /** Lobby only: removes the seat if the phone does not come back in time. */
   dropTimer: ReturnType<typeof setTimeout> | null;
 }
@@ -175,6 +177,7 @@ export class Session {
         connected: true,
         photo: null,
         photoRev: 0,
+        name: null,
         dropTimer: null,
       };
       this.members.push(member);
@@ -239,6 +242,10 @@ export class Session {
       this.setPhoto(member, message.image);
       return;
     }
+    if (message.type === 'name') {
+      this.setName(member, message.name);
+      return;
+    }
     if (!this.canAct(member)) return;
 
     if (message.type === 'draft') {
@@ -262,6 +269,13 @@ export class Session {
       member.photo = bytes;
       member.photoRev = ++this.photoCounter;
     }
+    this.broadcast();
+  }
+
+  /** Names can only be changed in the lobby, before the match starts. */
+  private setName(member: Member, name: string): void {
+    if (this.phase !== 'lobby') return;
+    member.name = name;
     this.broadcast();
   }
 
@@ -298,8 +312,8 @@ export class Session {
       this.setNotice(
         autoFired ? 'warning' : 'info',
         autoFired
-          ? `Time's up! Player ${member.playerId}'s function was fired as typed: y = ${expression}`
-          : `Player ${member.playerId} fired y = ${expression}`,
+          ? `Time's up! ${this.nameOf(member.playerId)}'s function was fired as typed: y = ${expression}`
+          : `${this.nameOf(member.playerId)} fired y = ${expression}`,
         false,
       );
       this.launch([fired]);
@@ -357,7 +371,7 @@ export class Session {
     let text = summaries.map((s) => s.text).join(' ');
     if (next.status === 'over') {
       this.phase = 'over';
-      text += next.winnerId !== null ? ` Player ${next.winnerId} wins!` : ' Everyone was eliminated: draw!';
+      text += next.winnerId !== null ? ` ${this.nameOf(next.winnerId)} wins!` : ' Everyone was eliminated: draw!';
       this.stopCountdown();
     } else {
       this.startCountdown();
@@ -403,7 +417,7 @@ export class Session {
       const member = this.members.find((m) => m.playerId === game.turn.currentPlayerId);
       const draft = member ? this.drafts.get(member.playerId) : undefined;
       if (autoFire && member && draft && this.fire(member, draft.expression, draft.direction, true)) return;
-      this.setNotice('warning', `Player ${game.turn.currentPlayerId}'s turn was skipped. ${reason}`, false);
+      this.setNotice('warning', `${this.nameOf(game.turn.currentPlayerId)}'s turn was skipped. ${reason}`, false);
       this.game = advanceTurn(game);
     }
     this.drafts.clear();
@@ -415,6 +429,7 @@ export class Session {
     this.cancelPending();
     this.matchId++;
     this.game = createInitialState(config);
+    for (const player of this.game.players) player.name = this.nameOf(player.id);
     this.phase = 'playing';
     this.drafts.clear();
     this.submissions.clear();
@@ -467,12 +482,21 @@ export class Session {
     const soldier = this.game ? this.game.soldiers.find((s) => s.playerId === member.playerId) : undefined;
     return {
       playerId: member.playerId,
-      name: `Player ${member.playerId}`,
+      name: this.nameOfMember(member),
       color: this.colorOf(member.playerId),
       connected: member.connected,
       alive: soldier ? soldier.alive : true,
       photoRev: member.photoRev,
     };
+  }
+
+  private nameOfMember(member: Member): string {
+    return member.name ?? `Player ${member.playerId}`;
+  }
+
+  private nameOf(playerId: PlayerId): string {
+    const member = this.members.find((m) => m.playerId === playerId);
+    return member ? this.nameOfMember(member) : `Player ${playerId}`;
   }
 
   /** Validated drafts of everyone who may currently type (one in turn mode, several when simultaneous). */
@@ -536,7 +560,7 @@ export class Session {
       you: this.memberView(member),
       playerCount: this.members.length,
       currentPlayerId,
-      currentPlayerName: currentPlayerId === null ? null : `Player ${currentPlayerId}`,
+      currentPlayerName: currentPlayerId === null ? null : this.nameOf(currentPlayerId),
       canAct: this.canAct(member),
       submitted: this.submissions.has(member.playerId),
       firedCount: this.submissions.size,
@@ -545,6 +569,7 @@ export class Session {
       turnDirection: mine ? defaultDirection(mine) : 1,
       shotInFlight: this.pending !== null,
       winnerId: game?.winnerId ?? null,
+      winnerName: game?.winnerId == null ? null : this.nameOf(game.winnerId),
       matchId: this.matchId,
       draftError: drafts.find((d) => d.playerId === member.playerId)?.error ?? null,
       timer,

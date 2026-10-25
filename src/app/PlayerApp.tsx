@@ -43,7 +43,7 @@ function statusOf(view: PlayerView): { text: string; tone: 'go' | 'wait' | 'out'
   if (view.phase === 'lobby') return { text: `Waiting for the host to start (${view.playerCount} joined)`, tone: 'wait' };
   if (view.phase === 'over') {
     const text =
-      view.winnerId === you.playerId ? 'You won! 🎉' : view.winnerId !== null ? `Player ${view.winnerId} won` : 'Draw — nobody is left';
+      view.winnerId === you.playerId ? 'You won! 🎉' : view.winnerId !== null ? `${view.winnerName ?? `Player ${view.winnerId}`} won` : 'Draw — nobody is left';
     return { text, tone: 'wait' };
   }
   if (!you.alive) return { text: 'You were eliminated. Watch the big screen.', tone: 'out' };
@@ -156,7 +156,12 @@ export function PlayerApp() {
       </header>
       {view.phase === 'lobby' && <div className="phone-rules">{rulesSummary(view)}</div>}
       {view.phase === 'lobby' && (
-        <SelfieCard you={you} disabled={!connected} onPhoto={(image) => send({ type: 'photo', image })} />
+        <SelfieCard
+          you={you}
+          disabled={!connected}
+          onPhoto={(image) => send({ type: 'photo', image })}
+          onName={(name) => send({ type: 'name', name })}
+        />
       )}
       {view.phase === 'playing' && <Countdown timer={view.timer} />}
 
