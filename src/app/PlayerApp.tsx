@@ -31,7 +31,7 @@ function rulesSummary(view: PlayerView): string {
   const { options } = view;
   const parts = [
     options.shotMode === 'simultaneous' ? 'All at once' : 'One after another',
-    options.preview ? 'preview on' : 'preview off',
+    options.preview === 'curve' ? 'curve preview' : options.preview === 'direction' ? 'direction preview' : 'preview off',
     options.playerMovement ? 'movement on' : 'movement off',
     options.countdownEnabled ? `${options.countdownSeconds}s countdown` : 'no countdown',
   ];

@@ -19,6 +19,12 @@ export interface PathLine {
   color: string;
 }
 
+export interface DirectionLine {
+  start: TrajectoryPoint;
+  end: TrajectoryPoint;
+  color: string;
+}
+
 export interface Scene {
   state: GameState;
   /** The soldier whose position is the origin (0,0) of the axes, or null for plain world axes. */
@@ -33,6 +39,7 @@ export interface Scene {
   /** Faint dashed traces of the previous shot(s). */
   traces: PathLine[];
   previews: PathLine[];
+  previewDirections?: DirectionLine[];
   /** Shots being animated, already trimmed to the portion revealed so far. */
   shots: PathLine[];
   effects: Effect[];
@@ -229,6 +236,30 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   // Preview trajectories
   for (const preview of scene.previews) {
     drawLine(preview.points, { color: preview.color, alpha: 0.75, width: 2, dash: [6, 6] });
+  }
+
+  for (const arrow of scene.previewDirections ?? []) {
+    const startX = px(arrow.start.x);
+    const startY = py(arrow.start.y);
+    const endX = px(arrow.end.x);
+    const endY = py(arrow.end.y);
+    const angle = Math.atan2(endY - startY, endX - startX);
+    const headLength = Math.max(6, Math.min(12, scale * 0.65));
+    ctx.save();
+    ctx.strokeStyle = arrow.color;
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = arrow.color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.moveTo(endX - headLength * Math.cos(angle - Math.PI / 6), endY - headLength * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(endX, endY);
+    ctx.lineTo(endX - headLength * Math.cos(angle + Math.PI / 6), endY - headLength * Math.sin(angle + Math.PI / 6));
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Animated shots

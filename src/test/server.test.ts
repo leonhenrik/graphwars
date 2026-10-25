@@ -64,7 +64,7 @@ describe('server over real WebSockets', () => {
       type: 'configure',
       mapId: 'classic',
       seed: 1,
-      options: { shotMode: 'turns', preview: true, playerMovement: false, playerMovementDistance: 0.5, countdownEnabled: false, countdownSeconds: 30 },
+      options: { shotMode: 'turns', preview: 'curve', playerMovement: false, playerMovementDistance: 0.5, countdownEnabled: false, countdownSeconds: 30 },
     });
     await big.until(big.lastDisplay((v) => v.options.shotMode === 'turns'));
     big.send({ type: 'start' });
@@ -105,7 +105,7 @@ describe('server over real WebSockets', () => {
       type: 'configure',
       mapId: 'classic',
       seed: 1,
-      options: { shotMode: 'simultaneous', preview: false, playerMovement: false, playerMovementDistance: 0.5, countdownEnabled: true, countdownSeconds: 30 },
+      options: { shotMode: 'simultaneous', preview: 'off', playerMovement: false, playerMovementDistance: 0.5, countdownEnabled: true, countdownSeconds: 30 },
     });
     await big.until(big.lastDisplay((v) => v.options.shotMode === 'simultaneous'));
     big.send({ type: 'start' });

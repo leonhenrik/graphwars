@@ -52,6 +52,7 @@ function MapThumbnail({ config }: { config: MatchConfig }) {
       photos: {},
       traces: [],
       previews: [],
+      previewDirections: [],
       shots: [],
       effects: [],
       now: 0,
@@ -221,12 +222,13 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
               <Segmented
                 testId="rule-preview"
                 label="Trajectory preview"
-                value={options.preview ? 'on' : 'off'}
+                value={options.preview}
                 choices={[
-                  { value: 'on', label: 'On' },
                   { value: 'off', label: 'Off' },
+                  { value: 'curve', label: 'Curve' },
+                  { value: 'direction', label: 'Direction' },
                 ]}
-                onChange={(v) => update({ preview: v === 'on' })}
+                onChange={(preview) => update({ preview })}
               />
               <Segmented
                 testId="rule-player-movement"

@@ -1,7 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { GameState, ShotDirection } from '../../game/types';
 import type { FiredShot } from '../../shared/protocol';
-import { drawScene, partialPath, pathLength, EFFECT_DURATION_MS, type Effect, type PathLine } from './render';
+import {
+  drawScene,
+  partialPath,
+  pathLength,
+  EFFECT_DURATION_MS,
+  type DirectionLine,
+  type Effect,
+  type PathLine,
+} from './render';
 
 /** One or more shots that are animated together (several when players fire simultaneously). */
 export interface ShotAnimation {
@@ -17,6 +25,7 @@ interface Props {
   direction: ShotDirection;
   photos: Record<number, string>;
   previews: PathLine[];
+  previewDirections: DirectionLine[];
   /** Faint dashed traces of the previous shot(s), shown until the next shot is fired. */
   traces: PathLine[];
   animation: ShotAnimation | null;
@@ -37,6 +46,7 @@ export function Battlefield({
   direction,
   photos,
   previews,
+  previewDirections,
   traces,
   animation,
   effects,
@@ -69,8 +79,8 @@ export function Battlefield({
   }, [aspect]);
 
   // The render loop reads the latest props via a ref so it never needs restarting.
-  const latest = useRef({ state, originId, activeIds, lockedIds, direction, photos, previews, traces, effects, onAnimationComplete });
-  latest.current = { state, originId, activeIds, lockedIds, direction, photos, previews, traces, effects, onAnimationComplete };
+  const latest = useRef({ state, originId, activeIds, lockedIds, direction, photos, previews, previewDirections, traces, effects, onAnimationComplete });
+  latest.current = { state, originId, activeIds, lockedIds, direction, photos, previews, previewDirections, traces, effects, onAnimationComplete };
 
   const animRef = useRef<{
     id: number;
@@ -134,6 +144,7 @@ export function Battlefield({
         direction: cur.direction,
         photos: cur.photos,
         previews: anim ? [] : cur.previews,
+        previewDirections: anim ? [] : cur.previewDirections,
         traces: anim ? [] : cur.traces,
         shots: shotLines,
         effects: liveEffects,

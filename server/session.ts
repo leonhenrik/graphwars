@@ -569,8 +569,14 @@ export class Session {
   private broadcast(): void {
     const drafts = this.draftViews();
     const timer = this.timerView();
-    // With the preview option off the big screen learns nothing about what is being typed.
-    const publicDrafts = this.options.preview ? drafts : drafts.map((d) => ({ ...d, expression: '', points: null }));
+    const publicDrafts =
+      this.options.preview === 'curve'
+        ? drafts
+        : drafts.map((d) => ({
+            ...d,
+            expression: '',
+            points: this.options.preview === 'direction' ? d.points?.slice(0, 2) ?? null : null,
+          }));
     const display: DisplayView = {
       phase: this.phase,
       mapId: this.config.mapId,

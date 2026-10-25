@@ -59,7 +59,7 @@ function addPlayer(token: string | null = null) {
 /** The option set these tests were written against; the app's own defaults are covered separately. */
 const TEST_OPTIONS: GameOptions = {
   shotMode: 'turns',
-  preview: true,
+  preview: 'curve',
   playerMovement: false,
   playerMovementDistance: 0.5,
   countdownEnabled: false,
@@ -217,7 +217,7 @@ describe('game options', () => {
   it('defaults to simultaneous shots, preview off, movement off, and a 30-second countdown', () => {
     expect(display.display().options).toEqual({
       shotMode: 'simultaneous',
-      preview: false,
+      preview: 'off',
       playerMovement: false,
       playerMovementDistance: 0.5,
       countdownEnabled: true,
@@ -229,7 +229,7 @@ describe('game options', () => {
     const phone = addPlayer();
     configure({
       shotMode: 'simultaneous',
-      preview: false,
+      preview: 'off',
       playerMovement: true,
       playerMovementDistance: 1.2,
       countdownEnabled: true,
@@ -237,7 +237,7 @@ describe('game options', () => {
     }, 'scatter', 9);
     const expected = {
       shotMode: 'simultaneous',
-      preview: false,
+      preview: 'off',
       playerMovement: true,
       playerMovementDistance: 1.2,
       countdownEnabled: true,
@@ -311,7 +311,7 @@ describe('game options', () => {
 
 describe('preview option', () => {
   it('on: the big screen gets the expression and the curve', () => {
-    const [p1] = startWith(2, { preview: true });
+    const [p1] = startWith(2, { preview: 'curve' });
     session.handle(p1, { type: 'draft', expression: 'sin(x)', direction: 1 });
     const [draft] = display.display().drafts;
     expect(draft).toMatchObject({ playerId: 1, expression: 'sin(x)', direction: 1, error: null });
@@ -319,7 +319,7 @@ describe('preview option', () => {
   });
 
   it('off: the big screen learns nothing about the function, but the phone still sees syntax errors', () => {
-    const [p1] = startWith(2, { preview: false });
+    const [p1] = startWith(2, { preview: 'off' });
     session.handle(p1, { type: 'draft', expression: 'sin(x)', direction: 1 });
     expect(display.display().drafts[0]).toMatchObject({ playerId: 1, expression: '', points: null, error: null });
     expect(JSON.stringify(display.display())).not.toContain('sin(x)');
@@ -329,8 +329,22 @@ describe('preview option', () => {
     expect(display.display().drafts[0]!.points).toBeNull();
   });
 
+  it('direction: the big screen gets only the initial curve direction, not the expression or full curve', () => {
+    const [p1] = startWith(2, { preview: 'direction' });
+    session.handle(p1, { type: 'draft', expression: 'sin(x)', direction: 1 });
+    const [draft] = display.display().drafts;
+
+    expect(draft).toMatchObject({ playerId: 1, expression: '', direction: 1, error: null });
+    expect(draft!.points).toHaveLength(2);
+    expect(JSON.stringify(display.display())).not.toContain('sin(x)');
+
+    session.handle(p1, { type: 'draft', expression: 'sin(', direction: 1 });
+    expect(p1.player().draftError).toBeTruthy();
+    expect(display.display().drafts[0]!.points).toBeNull();
+  });
+
   it('off: firing still works and reveals the function only afterwards', () => {
-    const [p1] = startWith(2, { preview: false });
+    const [p1] = startWith(2, { preview: 'off' });
     session.handle(p1, { type: 'fire', expression: '0', direction: 1 });
     expect(display.shotMessages()).toHaveLength(1);
     expect(display.display().notice?.text).toContain('y = 0');
@@ -868,7 +882,7 @@ describe('phone support', () => {
   });
 
   it('previews stop at the battlefield border', () => {
-    const [p1] = startWith(2, { preview: true });
+    const [p1] = startWith(2, { preview: 'curve' });
     session.handle(p1, { type: 'draft', expression: '0', direction: 1 });
     const points = display.display().drafts[0]!.points!;
     const { bounds } = display.display().game!.battlefield;
@@ -881,7 +895,7 @@ describe('phone support', () => {
 describe('parseClientMessage', () => {
   const options = {
     shotMode: 'turns',
-    preview: true,
+    preview: 'curve',
     playerMovement: false,
     playerMovementDistance: 0.5,
     countdownEnabled: false,
@@ -934,6 +948,7 @@ describe('parseClientMessage', () => {
     { type: 'configure', mapId: 'classic', seed: 1.5, options },
     { type: 'configure', mapId: 'classic', seed: 1 },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, shotMode: 'chaos' } },
+    { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, preview: true } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, preview: 'yes' } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovement: undefined } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovementDistance: undefined } },

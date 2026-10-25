@@ -25,7 +25,7 @@ export const PLAYER_MOVEMENT_STEP = 0.1;
 
 export const DEFAULT_OPTIONS: GameOptions = {
   shotMode: 'simultaneous',
-  preview: false,
+  preview: 'off',
   playerMovement: false,
   playerMovementDistance: 0.5,
   countdownEnabled: true,

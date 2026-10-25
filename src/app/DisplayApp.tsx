@@ -6,7 +6,7 @@ import { Countdown } from './components/Countdown';
 import { GameOverModal } from './components/GameOverModal';
 import { Lobby } from './components/Lobby';
 import { PlayerChips } from './components/PlayerChips';
-import { LABEL_DURATION_MS, type Effect, type PathLine } from './components/render';
+import { LABEL_DURATION_MS, type DirectionLine, type Effect, type PathLine } from './components/render';
 import { TurnIndicator } from './components/TurnIndicator';
 import { useSocket } from '../client/useSocket';
 import { defaultDirection, getPlayerSoldier, getSoldier } from '../game/gameState';
@@ -146,7 +146,27 @@ export function DisplayApp() {
         ? [originId]
         : [];
   const lockedIds = simultaneous ? view.submitted.flatMap((id) => getPlayerSoldier(game, id)?.id ?? []) : [];
-  const previews: PathLine[] = view.drafts.flatMap((d) => (d.points ? [{ points: d.points, color: colorOf(d.playerId) }] : []));
+  const previews: PathLine[] =
+    view.options.preview === 'curve'
+      ? view.drafts.flatMap((d) => (d.points ? [{ points: d.points, color: colorOf(d.playerId) }] : []))
+      : [];
+  const previewDirections: DirectionLine[] =
+    view.options.preview === 'direction'
+      ? view.drafts.flatMap((draft) => {
+          const [start, next] = draft.points ?? [];
+          if (!start || !next) return [];
+          const dx = next.x - start.x;
+          const dy = next.y - start.y;
+          const length = Math.hypot(dx, dy);
+          if (length === 0) return [];
+          const arrowLength = 3;
+          return [{
+            start,
+            end: { x: start.x + (dx / length) * arrowLength, y: start.y + (dy / length) * arrowLength },
+            color: colorOf(draft.playerId),
+          }];
+        })
+      : [];
 
   const someoneOffline = simultaneous
     ? view.members.some((m) => m.alive && !m.connected && !view.submitted.includes(m.playerId))
@@ -188,7 +208,8 @@ export function DisplayApp() {
             lockedIds={lockedIds}
             direction={direction}
             photos={photos}
-            previews={view.options.preview ? previews : []}
+            previews={previews}
+            previewDirections={previewDirections}
             traces={traces}
             animation={animation}
             effects={effects}
@@ -216,11 +237,13 @@ export function DisplayApp() {
           ) : activeDraft ? (
             <>
               <strong style={{ color: current?.color }}>{current?.name}</strong>{' '}
-              {view.options.preview ? (
+              {view.options.preview === 'curve' ? (
                 <>
                   y = <code>{activeDraft.expression || '…'}</code>{' '}
                   <span className="draft-dir">{activeDraft.direction === 1 ? 'x →' : '← x'}</span>
                 </>
+              ) : view.options.preview === 'direction' ? (
+                <span>is setting a function (direction shown)</span>
               ) : (
                 <span>is typing…</span>
               )}

@@ -9,6 +9,7 @@ import type {
   GameState,
   MapId,
   PlayerId,
+  PreviewMode,
   ShotDirection,
   ShotMode,
   ShotResult,
@@ -40,10 +41,10 @@ export function photoUrl(member: Pick<MemberView, 'playerId' | 'photoRev'>): str
   return member.photoRev > 0 ? `/api/photo/${member.playerId}?v=${member.photoRev}` : null;
 }
 
-/** What a phone is currently typing, validated (and, if the preview option is on, previewed) by the server. */
+/** What a phone is currently typing, validated and sanitized to the configured preview mode. */
 export interface DraftView {
   playerId: PlayerId;
-  /** Empty when the preview option is off, so the big screen does not reveal the function. */
+  /** Empty unless full-curve preview is enabled. */
   expression: string;
   direction: ShotDirection;
   points: TrajectoryPoint[] | null;
@@ -135,13 +136,14 @@ const JPEG_DATA_URL = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 
 const MAP_IDS: MapId[] = ['classic', 'pillars', 'scatter', 'chaos'];
 const SHOT_MODES: ShotMode[] = ['turns', 'simultaneous'];
+const PREVIEW_MODES: PreviewMode[] = ['off', 'curve', 'direction'];
 
 function parseOptions(raw: unknown): GameOptions | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const o = raw as Record<string, unknown>;
   if (
     !SHOT_MODES.includes(o.shotMode as ShotMode) ||
-    typeof o.preview !== 'boolean' ||
+    !PREVIEW_MODES.includes(o.preview as PreviewMode) ||
     typeof o.playerMovement !== 'boolean' ||
     typeof o.playerMovementDistance !== 'number' ||
     !Number.isFinite(o.playerMovementDistance) ||
@@ -157,7 +159,7 @@ function parseOptions(raw: unknown): GameOptions | null {
   }
   return {
     shotMode: o.shotMode as ShotMode,
-    preview: o.preview,
+    preview: o.preview as PreviewMode,
     playerMovement: o.playerMovement,
     playerMovementDistance: o.playerMovementDistance,
     countdownEnabled: o.countdownEnabled,
