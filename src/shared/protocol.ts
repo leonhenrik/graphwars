@@ -123,7 +123,7 @@ export const MAX_MESSAGE_EXPRESSION = 500;
 export const MAX_PHOTO_CHARS = 32_000;
 const JPEG_DATA_URL = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 
-const MAP_IDS: MapId[] = ['classic', 'pillars', 'scatter'];
+const MAP_IDS: MapId[] = ['classic', 'pillars', 'scatter', 'chaos'];
 const SHOT_MODES: ShotMode[] = ['turns', 'simultaneous'];
 
 function parseOptions(raw: unknown): GameOptions | null {

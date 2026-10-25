@@ -107,6 +107,16 @@ describe('map generation', () => {
     }
   });
 
+  it('chaos is generated for every seed (no classic fallback) and is much denser than classic', () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const n = playerCounts[seed % playerCounts.length]!;
+      const chaos = generateMap('chaos', n, seed * 5 + 1);
+      expect(chaos).not.toEqual(generateMap('classic', n, 1));
+      expect(chaos.battlefield.obstacles.length).toBeGreaterThanOrEqual(10);
+      expect(validateLayout(chaos.positions, chaos.battlefield)).toEqual([]);
+    }
+  });
+
   it('validateLayout catches violations', () => {
     const base = generateMap('classic', 2, 1);
     expect(validateLayout(base.positions, { ...base.battlefield, obstacles: [] }).join()).toMatch(/straight line/);

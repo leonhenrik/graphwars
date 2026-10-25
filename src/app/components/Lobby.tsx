@@ -278,7 +278,7 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                   );
                 })}
               </div>
-              {mapId === 'scatter' && (
+              {(mapId === 'scatter' || mapId === 'chaos') && (
                 <button
                   className="btn shuffle"
                   onClick={() => onConfigure(mapId, Math.floor(Math.random() * 1_000_000), options)}

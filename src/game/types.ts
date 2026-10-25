@@ -39,7 +39,7 @@ export interface Battlefield {
   obstacles: Obstacle[];
 }
 
-export type MapId = 'classic' | 'pillars' | 'scatter';
+export type MapId = 'classic' | 'pillars' | 'scatter' | 'chaos';
 
 export interface MatchConfig {
   playerCount: number;

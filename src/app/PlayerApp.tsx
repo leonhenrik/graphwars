@@ -50,7 +50,7 @@ function statusOf(view: PlayerView): { text: string; tone: 'go' | 'wait' | 'out'
   if (view.shotInFlight) return { text: simultaneous ? 'Shots in flight…' : 'Shot in flight…', tone: 'wait' };
   if (view.canAct) {
     return {
-      text: simultaneous ? `Round ${view.turnNumber}: enter a function and fire!` : 'Your turn! Enter a function and fire.',
+      text: simultaneous ? `Enter a function and fire!` : 'Enter a function and fire.',
       tone: 'go',
     };
   }
@@ -143,17 +143,17 @@ export function PlayerApp() {
     <div className="phone" data-testid="phone">
       <header className="phone-header" style={{ borderColor: you.color }}>
         <Avatar member={you} size={30} />
-        <strong data-testid="phone-name">You are {you.name}</strong>
+        <strong data-testid="phone-name">{you.name}</strong>
         {!connected && <span className="offline-tag">reconnecting…</span>}
+        <span className={`phone-status ${status.tone}`} data-testid="phone-status">
+          {status.text}
+        </span>
         {view.phase !== 'lobby' && (
           <span className="phone-round" data-testid="phone-round">
             {view.options.shotMode === 'simultaneous' ? 'Round' : 'Turn'} {view.turnNumber}
           </span>
         )}
       </header>
-      <div className={`phone-status ${status.tone}`} data-testid="phone-status">
-        {status.text}
-      </div>
       {view.phase === 'lobby' && <div className="phone-rules">{rulesSummary(view)}</div>}
       {view.phase === 'lobby' && (
         <SelfieCard you={you} disabled={!connected} onPhoto={(image) => send({ type: 'photo', image })} />
@@ -173,7 +173,6 @@ export function PlayerApp() {
           fireLabel={fireLabel}
         />
       )}
-      {view.notice && view.phase !== 'lobby' && <div className={`message ${view.notice.kind}`}>{view.notice.text}</div>}
     </div>
   );
 }

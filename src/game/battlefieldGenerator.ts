@@ -17,6 +17,7 @@ export const MAPS: MapInfo[] = [
   { id: 'classic', name: 'Classic', description: 'Players on a ring around a big central rock.' },
   { id: 'pillars', name: 'Pillars', description: 'A staggered field of small pillars.' },
   { id: 'scatter', name: 'Scatter', description: 'Random positions and rocks, different every seed.' },
+  { id: 'chaos', name: 'Chaos', description: 'Dense random rocks everywhere. Shots have to snake through.' },
 ];
 
 /** Minimum gap between an obstacle's edge and a soldier's edge, so nobody touches an obstacle. */
@@ -76,7 +77,7 @@ function fitsField(o: Obstacle, soldiers: TrajectoryPoint[]): boolean {
   return soldiers.every((s) => Math.hypot(s.x - o.x, s.y - o.y) >= o.radius + SOLDIER_RADIUS + CLEARANCE);
 }
 
-function templateObstacles(mapId: MapId, rand: () => number, soldiers: TrajectoryPoint[]): Obstacle[] {
+function templateObstacles(mapId: MapId, rand: () => number, soldiers: TrajectoryPoint[], attempt: number): Obstacle[] {
   const candidates: Array<Omit<Obstacle, 'id'>> = [];
   if (mapId === 'classic') {
     candidates.push(
@@ -92,6 +93,34 @@ function templateObstacles(mapId: MapId, rand: () => number, soldiers: Trajector
         candidates.push({ x: -15 + ix * 7.5, y: -8 + iy * 8 + (ix % 2 === 0 ? 0 : 4), radius: 1.2 });
       }
     }
+  } else if (mapId === 'chaos') {
+    // Obstacles are scattered over the whole field, with guards crowding every soldier. The density
+    // drops on later attempts so a valid layout is always found eventually.
+    const target = Math.max(10, 22 - Math.floor(attempt / 6) * 2);
+    const placed: Array<Omit<Obstacle, 'id'>> = [];
+    const tryPlace = (x: number, y: number, radius: number) => {
+      const apart = placed.every((p) => Math.hypot(p.x - x, p.y - y) >= p.radius + radius - 0.4);
+      if (apart && fitsField({ id: '', x, y, radius }, soldiers)) placed.push({ x, y, radius });
+    };
+    for (const s of soldiers) {
+      for (let guard = 0; guard < 2; guard++) {
+        for (let tries = 0; tries < 20; tries++) {
+          const radius = round1(1 + rand() * 1);
+          const angle = rand() * Math.PI * 2;
+          const dist = SOLDIER_RADIUS + CLEARANCE + radius + 0.4 + rand() * 2;
+          const before = placed.length;
+          tryPlace(round1(s.x + Math.cos(angle) * dist), round1(s.y + Math.sin(angle) * dist), radius);
+          if (placed.length > before) break;
+        }
+      }
+    }
+    for (let tries = 0; tries < 600 && placed.length < target; tries++) {
+      const radius = round1(0.9 + rand() * 1.9);
+      const x = round1(BOUNDS.minX + radius + rand() * (BOUNDS.maxX - BOUNDS.minX - 2 * radius));
+      const y = round1(BOUNDS.minY + radius + rand() * (BOUNDS.maxY - BOUNDS.minY - 2 * radius));
+      tryPlace(x, y, radius);
+    }
+    candidates.push(...placed);
   } else {
     const count = 6 + Math.floor(rand() * 4);
     const placed: Array<Omit<Obstacle, 'id'>> = [];
@@ -155,7 +184,7 @@ function tryGenerate(mapId: MapId, n: number, attempt: number, rand: () => numbe
         : scatterPositions(n, rand);
   if (!positions) return null;
 
-  const obstacles = templateObstacles(mapId, rand, positions);
+  const obstacles = templateObstacles(mapId, rand, positions, attempt);
   if (!blockOpenLines(positions, obstacles)) return null;
 
   const battlefield: Battlefield = { bounds: { ...BOUNDS }, obstacles };

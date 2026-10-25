@@ -1,5 +1,9 @@
 import { useLayoutEffect, useRef } from 'react';
-import { EXPRESSION_EXAMPLES } from '../../game/expressionParser';
+
+/** A short tick for every calculator tap (no-op where the device has no vibration). */
+function buzz(): void {
+  if ('vibrate' in navigator) navigator.vibrate(12);
+}
 
 interface Props {
   value: string;
@@ -66,6 +70,7 @@ export function Calculator({
 
   const moveCaret = (delta: -1 | 1) => {
     if (disabled) return;
+    buzz();
     const el = inputRef.current;
     if (!el) return;
     const { start, end } = selection();
@@ -78,6 +83,7 @@ export function Calculator({
 
   const press = (key: Key) => {
     if (disabled) return;
+    buzz();
     const { start, end } = selection();
     if (key.label === '⌫') {
       if (start === end && start === 0) return;
@@ -97,14 +103,15 @@ export function Calculator({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (canFire) onFire();
+          if (canFire) {
+            buzz();
+            onFire();
+          }
         }}
       >
-        <label htmlFor="fn-input" className="fn-label">
-          y = f(x) <span className="fn-hint">· you are at x = 0, y = 0</span>
-        </label>
         <input
           id="fn-input"
+          aria-label="y = f(x)"
           ref={inputRef}
           className={`fn-input${error ? ' invalid' : ''}`}
           value={value}
@@ -120,10 +127,6 @@ export function Calculator({
           aria-describedby="fn-error"
           placeholder="e.g. sin(x)"
         />
-        <div id="fn-error" className="fn-error" role="alert" data-testid="expression-error">
-          {error}
-        </div>
-
         <div className="keypad" role="group" aria-label="Keypad">
           {KEYS.map((key) => (
             <button
@@ -138,6 +141,10 @@ export function Calculator({
               {key.label}
             </button>
           ))}
+        </div>
+
+        <div id="fn-error" className="fn-error" role="alert" data-testid="expression-error">
+          {error}
         </div>
 
         <div className="tool-row">
@@ -171,6 +178,7 @@ export function Calculator({
             disabled={disabled}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
+              buzz();
               pendingCaret.current = 0;
               onChange('');
               inputRef.current?.focus();
@@ -181,7 +189,10 @@ export function Calculator({
           <button
             type="button"
             className="btn direction"
-            onClick={onToggleDirection}
+            onClick={() => {
+              buzz();
+              onToggleDirection();
+            }}
             disabled={disabled}
             data-testid="direction-toggle"
           >
@@ -193,25 +204,6 @@ export function Calculator({
           {fireLabel}
         </button>
       </form>
-      <details className="syntax">
-        <summary>Syntax help</summary>
-        <p>
-          Variable <code>x</code>; operators <code>+ - * / ^</code>, parentheses. Functions:{' '}
-          <code>sin cos tan sqrt abs log ln exp</code> (<code>log</code> is base 10). Constants: <code>pi</code>,{' '}
-          <code>e</code>.
-        </p>
-        <p className="examples">
-          {EXPRESSION_EXAMPLES.map((ex) => (
-            <button key={ex} type="button" className="chip" onClick={() => onChange(ex)} disabled={disabled}>
-              {ex}
-            </button>
-          ))}
-        </p>
-        <p>
-          You are always the origin (0, 0): x is measured from you, positive in the shooting direction. Flip the
-          direction to mirror the shot. The first thing the curve touches is hit.
-        </p>
-      </details>
     </section>
   );
 }

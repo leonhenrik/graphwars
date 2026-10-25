@@ -128,6 +128,11 @@ describe('lobby', () => {
     expect(display.display().game!.config.mapId).toBe('pillars');
   });
 
+  it('accepts the chaos map from the display', () => {
+    startWith(2, {}, 'chaos');
+    expect(display.display().game!.config.mapId).toBe('chaos');
+  });
+
   it('keeps the seat of a dropped phone for a grace period, then frees and renumbers it', () => {
     vi.useFakeTimers();
     fresh();
