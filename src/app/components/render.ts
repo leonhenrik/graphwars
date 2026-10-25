@@ -308,7 +308,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   // Animated shots
   for (const shot of scene.shots) {
     if (shot.points.length === 0) continue;
-    drawLine(shot.points, { color: shot.color, alpha: 0.96, width: 3, glow: 1 });
+    drawPencilLine(ctx, shot.points, shot.color, px, py);
     const head = shot.points[shot.points.length - 1] as TrajectoryPoint;
     ctx.save();
     ctx.fillStyle = '#fff9e9';
@@ -463,6 +463,37 @@ function strokePath(
   ctx.beginPath();
   points.forEach((p, i) => (i === 0 ? ctx.moveTo(px(p.x), py(p.y)) : ctx.lineTo(px(p.x), py(p.y))));
   ctx.stroke();
+}
+
+function drawPencilLine(
+  ctx: CanvasRenderingContext2D,
+  points: TrajectoryPoint[],
+  color: string,
+  px: (x: number) => number,
+  py: (y: number) => number,
+): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = 0.78;
+  ctx.lineWidth = 2.2;
+  strokePath(ctx, points, px, py);
+
+  ctx.globalAlpha = 0.27;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 2.5]);
+  ctx.lineDashOffset = -1;
+  ctx.translate(0.7, -0.55);
+  strokePath(ctx, points, px, py);
+
+  ctx.globalAlpha = 0.18;
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([1, 3.5]);
+  ctx.lineDashOffset = -2;
+  ctx.translate(-1.25, 1.1);
+  strokePath(ctx, points, px, py);
+  ctx.restore();
 }
 
 function sketchRockPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, seed: number): void {
