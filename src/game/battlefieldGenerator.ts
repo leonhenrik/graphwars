@@ -14,10 +14,10 @@ export interface MapInfo {
 }
 
 export const MAPS: MapInfo[] = [
-  { id: 'classic', name: 'Classic', description: 'Players on a ring around a big central rock.' },
-  { id: 'pillars', name: 'Pillars', description: 'A staggered field of small pillars.' },
-  { id: 'scatter', name: 'Scatter', description: 'Random positions and rocks, different every seed.' },
-  { id: 'chaos', name: 'Chaos', description: 'Dense random rocks everywhere. Shots have to snake through.' },
+  { id: 'classic', name: 'Classic', description: 'Players on a ring around a big  rock.' },
+  { id: 'pillars', name: 'Pillars', description: 'A field of small pillars.' },
+  { id: 'scatter', name: 'Scatter', description: 'Random positions and rocks.' },
+  { id: 'chaos', name: 'Chaos', description: 'Dense random rocks everywhere.' },
 ];
 
 /** Minimum gap between an obstacle's edge and a soldier's edge, so nobody touches an obstacle. */

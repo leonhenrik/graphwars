@@ -32,4 +32,4 @@ export const DEFAULT_OPTIONS: GameOptions = {
   countdownSeconds: 30,
 };
 
-export const PLAYER_COLORS = ['#38bdf8', '#fb923c', '#4ade80', '#f472b6', '#facc15', '#a78bfa'] as const;
+export const PLAYER_COLORS = ['#a9d8e8', '#f2c6a8', '#c7ddb0', '#e8b8c2', '#e9d891', '#d1c1e5'] as const;

@@ -130,8 +130,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   ctx.clearRect(0, 0, view.width, view.height);
 
   const bg = ctx.createLinearGradient(0, 0, 0, view.height);
-  bg.addColorStop(0, '#0f172a');
-  bg.addColorStop(1, '#13203a');
+  bg.addColorStop(0, '#fbf5e6');
+  bg.addColorStop(1, '#efe5cf');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, view.width, view.height);
 
@@ -140,7 +140,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   for (let u = -maxU; u <= maxU; u++) {
     const x = worldX(u);
     if (x < vb.minX || x > vb.maxX) continue;
-    ctx.strokeStyle = u % 5 === 0 ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.07)';
+    ctx.strokeStyle = u % 5 === 0 ? 'rgba(77,112,132,0.22)' : 'rgba(77,112,132,0.09)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(px(x), 0);
@@ -149,7 +149,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   }
   for (let v = Math.ceil(vb.minY - oy); v <= vb.maxY - oy; v++) {
     const y = oy + v;
-    ctx.strokeStyle = v % 5 === 0 ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.07)';
+    ctx.strokeStyle = v % 5 === 0 ? 'rgba(77,112,132,0.22)' : 'rgba(77,112,132,0.09)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, py(y));
@@ -158,7 +158,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   }
 
   // Axes through the origin player
-  const axisColor = origin ? scene.state.players.find((p) => p.id === origin.playerId)?.color ?? '#e2e8f0' : '#e2e8f0';
+  const axisColor = origin ? scene.state.players.find((p) => p.id === origin.playerId)?.color ?? '#49483f' : '#49483f';
   ctx.strokeStyle = axisColor;
   ctx.globalAlpha = 0.75;
   ctx.lineWidth = 1.5;
@@ -173,8 +173,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   // Ticks and labels in local coordinates (positive x points in the shooting direction)
   const fontSize = Math.max(9, Math.min(12, scale * 0.6));
   ctx.font = `${fontSize}px system-ui, sans-serif`;
-  ctx.fillStyle = 'rgba(203,213,225,0.8)';
-  ctx.strokeStyle = 'rgba(226,232,240,0.7)';
+  ctx.fillStyle = 'rgba(67,65,56,0.82)';
+  ctx.strokeStyle = 'rgba(67,65,56,0.62)';
   ctx.lineWidth = 1;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
@@ -202,16 +202,38 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   // Obstacles
   for (const o of scene.state.battlefield.obstacles) {
     const r = o.radius * scale;
-    const g = ctx.createRadialGradient(px(o.x) - r * 0.3, py(o.y) - r * 0.3, r * 0.1, px(o.x), py(o.y), r);
-    g.addColorStop(0, '#64748b');
-    g.addColorStop(1, '#334155');
-    ctx.fillStyle = g;
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(px(o.x), py(o.y), r, 0, Math.PI * 2);
+    const cx = px(o.x);
+    const cy = py(o.y);
+    ctx.save();
+    sketchRockPath(ctx, cx, cy, r, o.x * 19.7 + o.y * 7.3);
+    ctx.fillStyle = '#d2c6aa';
     ctx.fill();
+    ctx.strokeStyle = '#655e50';
+    ctx.lineWidth = Math.max(1.4, scale * 0.09);
+    ctx.lineJoin = 'round';
     ctx.stroke();
+
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = '#786f5d';
+    ctx.lineWidth = Math.max(0.8, scale * 0.045);
+    sketchRockPath(ctx, cx + 0.8, cy - 0.7, r, o.x * 19.7 + o.y * 7.3);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    sketchRockPath(ctx, cx, cy, r, o.x * 19.7 + o.y * 7.3);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(98, 88, 69, 0.24)';
+    ctx.lineWidth = Math.max(0.6, scale * 0.035);
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.62 + i * r * 0.28, cy + r * 0.18);
+      ctx.lineTo(cx - r * 0.16 + i * r * 0.28, cy - r * 0.24);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.restore();
   }
 
   const drawLine = (points: TrajectoryPoint[], style: StrokeStyle) => {
@@ -224,6 +246,13 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     ctx.setLineDash(style.dash ?? []);
     ctx.shadowColor = style.color;
     ctx.shadowBlur = style.glow ?? 0;
+    ctx.save();
+    ctx.globalAlpha = style.alpha * 0.14;
+    ctx.lineWidth = style.width + 1.2;
+    ctx.shadowBlur = 0;
+    ctx.translate(0.65, -0.45);
+    strokePath(ctx, points, px, py);
+    ctx.restore();
     strokePath(ctx, points, px, py);
     ctx.restore();
   };
@@ -265,10 +294,10 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
   // Animated shots
   for (const shot of scene.shots) {
     if (shot.points.length === 0) continue;
-    drawLine(shot.points, { color: shot.color, alpha: 1, width: 3.5, glow: 12 });
+    drawLine(shot.points, { color: shot.color, alpha: 0.96, width: 3, glow: 1 });
     const head = shot.points[shot.points.length - 1] as TrajectoryPoint;
     ctx.save();
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = '#fff9e9';
     ctx.beginPath();
     ctx.arc(px(head.x), py(head.y), 5, 0, Math.PI * 2);
     ctx.fill();
@@ -282,7 +311,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     const cy = py(s.y);
     const r = s.radius * scale;
     if (!s.alive) {
-      ctx.strokeStyle = 'rgba(148,163,184,0.55)';
+      ctx.strokeStyle = 'rgba(88,82,69,0.55)';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.moveTo(cx - r * 0.7, cy - r * 0.7);
@@ -294,7 +323,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     }
     if (scene.activeIds.includes(s.id)) {
       const pulse = 0.5 + 0.5 * Math.sin(scene.now / 220);
-      ctx.strokeStyle = '#fde047';
+      ctx.strokeStyle = '#bd8735';
       ctx.globalAlpha = 0.6 + 0.4 * pulse;
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -305,7 +334,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     if (s.id === scene.originId) {
       // Direction arrow
       const ax = cx + dir * (r + 12);
-      ctx.fillStyle = '#fde047';
+      ctx.fillStyle = '#bd8735';
       ctx.beginPath();
       ctx.moveTo(ax + dir * 10, cy);
       ctx.lineTo(ax, cy - 6);
@@ -314,7 +343,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       ctx.fill();
     }
     if (scene.lockedIds.includes(s.id)) {
-      ctx.strokeStyle = '#4ade80';
+      ctx.strokeStyle = '#71865d';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
@@ -339,13 +368,14 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
       continue;
     }
     ctx.fillStyle = color;
-    ctx.strokeStyle = '#0b1220';
+    ctx.strokeStyle = '#49483f';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.lineJoin = 'round';
     ctx.stroke();
-    ctx.fillStyle = '#0b1220';
+    ctx.fillStyle = '#302f29';
     ctx.font = `bold ${Math.max(10, r * 1.1)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -363,7 +393,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, view: View, scene: Scen
     const maxR = (e.kind === 'elimination' ? 3.2 : 1.6) * scale;
     ctx.save();
     ctx.globalAlpha = 1 - t;
-    ctx.strokeStyle = e.kind === 'elimination' ? '#f87171' : '#fde68a';
+    ctx.strokeStyle = e.kind === 'elimination' ? '#ad6547' : '#bd8735';
     ctx.lineWidth = 3 * (1 - t) + 1;
     ctx.beginPath();
     ctx.arc(cx, cy, maxR * easeOut(t), 0, Math.PI * 2);
@@ -403,7 +433,7 @@ function drawLabel(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineWidth = 4;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.strokeStyle = 'rgba(48, 47, 41, 0.72)';
   ctx.strokeText(e.label as string, cx, y);
   ctx.fillStyle = e.color;
   ctx.fillText(e.label as string, cx, y);
@@ -419,4 +449,18 @@ function strokePath(
   ctx.beginPath();
   points.forEach((p, i) => (i === 0 ? ctx.moveTo(px(p.x), py(p.y)) : ctx.lineTo(px(p.x), py(p.y))));
   ctx.stroke();
+}
+
+function sketchRockPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, seed: number): void {
+  const sides = 13;
+  ctx.beginPath();
+  for (let i = 0; i < sides; i++) {
+    const angle = (i / sides) * Math.PI * 2;
+    const roughness = 1 + Math.sin(seed + i * 2.41) * 0.11 + Math.cos(seed * 0.7 + i * 1.73) * 0.06;
+    const x = cx + Math.cos(angle) * radius * roughness;
+    const y = cy + Math.sin(angle) * radius * roughness;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
 }
