@@ -1,6 +1,5 @@
 import type { GameState, Obstacle, Soldier, TrajectoryPoint } from './types';
 
-const MOVE_DISTANCE = 0.45;
 const MOVE_SUBSTEP = 0.04;
 const EDGE_GAP = 0.08;
 
@@ -58,7 +57,7 @@ function clearStep(
   );
 }
 
-function moveSoldier(soldier: Soldier, others: Soldier[], state: GameState): TrajectoryPoint {
+function moveSoldier(soldier: Soldier, others: Soldier[], state: GameState, moveDistance: number): TrajectoryPoint {
   const { bounds } = state.battlefield;
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;
@@ -72,8 +71,8 @@ function moveSoldier(soldier: Soldier, others: Soldier[], state: GameState): Tra
   let travelled = 0;
   let sliding: Obstacle | null = null;
 
-  while (travelled < MOVE_DISTANCE) {
-    const step = Math.min(MOVE_SUBSTEP, MOVE_DISTANCE - travelled);
+  while (travelled < moveDistance) {
+    const step = Math.min(MOVE_SUBSTEP, moveDistance - travelled);
     const progress = travelled + step;
     const angle = startAngle - progress / radius;
     const desired = { x: centerX + radius * Math.cos(angle), y: centerY + radius * Math.sin(angle) };
@@ -119,15 +118,16 @@ function moveSoldier(soldier: Soldier, others: Soldier[], state: GameState): Tra
 }
 
 /** Moves each living player clockwise around the field centre, sliding along blocked obstacle edges. */
-export function movePlayersClockwise(state: GameState): GameState {
+export function movePlayersClockwise(state: GameState, moveDistance: number): GameState {
   if (state.status !== 'playing') return state;
+  if (!Number.isFinite(moveDistance) || moveDistance <= 0) return state;
 
   const soldiers = state.soldiers.map((soldier) => ({ ...soldier }));
   for (let i = 0; i < soldiers.length; i++) {
     const soldier = soldiers[i] as Soldier;
     if (!soldier.alive) continue;
     const others = soldiers.filter((other, index) => index !== i && other.alive);
-    const next = moveSoldier(soldier, others, state);
+    const next = moveSoldier(soldier, others, state, moveDistance);
     soldier.x = next.x;
     soldier.y = next.y;
   }

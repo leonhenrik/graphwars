@@ -1,6 +1,12 @@
 import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { MAX_PLAYERS, MIN_PLAYERS } from '../../game/constants';
+import {
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  PLAYER_MOVEMENT_MAX_DISTANCE,
+  PLAYER_MOVEMENT_MIN_DISTANCE,
+  PLAYER_MOVEMENT_STEP,
+} from '../../game/constants';
 import { createInitialState } from '../../game/gameState';
 import { MAPS } from '../../game/battlefieldGenerator';
 import type { GameOptions, MapId, MatchConfig } from '../../game/types';
@@ -232,6 +238,20 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                 ]}
                 onChange={(v) => update({ playerMovement: v === 'on' })}
               />
+              <div className={`slider-row${options.playerMovement ? '' : ' disabled'}`}>
+                <input
+                  type="range"
+                  min={PLAYER_MOVEMENT_MIN_DISTANCE}
+                  max={PLAYER_MOVEMENT_MAX_DISTANCE}
+                  step={PLAYER_MOVEMENT_STEP}
+                  value={options.playerMovementDistance}
+                  disabled={!options.playerMovement}
+                  aria-label="Player movement distance"
+                  data-testid="player-movement-distance"
+                  onChange={(e) => update({ playerMovementDistance: Number(e.target.value) })}
+                />
+                <span className="slider-value">{options.playerMovementDistance.toFixed(1)}</span>
+              </div>
               <Segmented
                 testId="rule-countdown"
                 label="Countdown"

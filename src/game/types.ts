@@ -66,6 +66,8 @@ export interface GameOptions {
   preview: boolean;
   /** Move living players a small clockwise step after each completed round. */
   playerMovement: boolean;
+  /** Distance living players move per round, in battlefield units. */
+  playerMovementDistance: number;
   countdownEnabled: boolean;
   countdownSeconds: number;
 }

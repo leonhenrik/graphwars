@@ -470,7 +470,7 @@ export class Session {
     const roundCompleted =
       this.simultaneous || next.turn.currentPlayerId <= previous.turn.currentPlayerId;
     return this.options.playerMovement && roundCompleted && next.status === 'playing'
-      ? movePlayersClockwise(next)
+      ? movePlayersClockwise(next, this.options.playerMovementDistance)
       : next;
   }
 

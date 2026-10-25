@@ -57,7 +57,14 @@ function addPlayer(token: string | null = null) {
 }
 
 /** The option set these tests were written against; the app's own defaults are covered separately. */
-const TEST_OPTIONS: GameOptions = { shotMode: 'turns', preview: true, playerMovement: false, countdownEnabled: false, countdownSeconds: 30 };
+const TEST_OPTIONS: GameOptions = {
+  shotMode: 'turns',
+  preview: true,
+  playerMovement: false,
+  playerMovementDistance: 0.5,
+  countdownEnabled: false,
+  countdownSeconds: 30,
+};
 
 function configure(options: Partial<GameOptions> = {}, mapId: MapId = 'classic', seed = 1) {
   session.handle(display, { type: 'configure', mapId, seed, options: { ...TEST_OPTIONS, ...options } });
@@ -208,13 +215,34 @@ describe('lobby', () => {
 
 describe('game options', () => {
   it('defaults to simultaneous shots, preview off, movement off, and a 30-second countdown', () => {
-    expect(display.display().options).toEqual({ shotMode: 'simultaneous', preview: false, playerMovement: false, countdownEnabled: true, countdownSeconds: 30 });
+    expect(display.display().options).toEqual({
+      shotMode: 'simultaneous',
+      preview: false,
+      playerMovement: false,
+      playerMovementDistance: 0.5,
+      countdownEnabled: true,
+      countdownSeconds: 30,
+    });
   });
 
   it('are configured in the lobby, shown to phones, and locked once the match runs', () => {
     const phone = addPlayer();
-    configure({ shotMode: 'simultaneous', preview: false, playerMovement: true, countdownEnabled: true, countdownSeconds: 45 }, 'scatter', 9);
-    const expected = { shotMode: 'simultaneous', preview: false, playerMovement: true, countdownEnabled: true, countdownSeconds: 45 };
+    configure({
+      shotMode: 'simultaneous',
+      preview: false,
+      playerMovement: true,
+      playerMovementDistance: 1.2,
+      countdownEnabled: true,
+      countdownSeconds: 45,
+    }, 'scatter', 9);
+    const expected = {
+      shotMode: 'simultaneous',
+      preview: false,
+      playerMovement: true,
+      playerMovementDistance: 1.2,
+      countdownEnabled: true,
+      countdownSeconds: 45,
+    };
     expect(display.display().options).toEqual(expected);
     expect(phone.player().options).toEqual(expected);
     expect(display.display().mapId).toBe('scatter');
@@ -851,7 +879,14 @@ describe('phone support', () => {
 });
 
 describe('parseClientMessage', () => {
-  const options = { shotMode: 'turns', preview: true, playerMovement: false, countdownEnabled: false, countdownSeconds: 30 };
+  const options = {
+    shotMode: 'turns',
+    preview: true,
+    playerMovement: false,
+    playerMovementDistance: 0.5,
+    countdownEnabled: false,
+    countdownSeconds: 30,
+  };
 
   it('accepts well-formed messages', () => {
     expect(parseClientMessage({ type: 'fire', expression: 'x', direction: 1 })).toEqual({
@@ -901,6 +936,10 @@ describe('parseClientMessage', () => {
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, shotMode: 'chaos' } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, preview: 'yes' } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovement: undefined } },
+    { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovementDistance: undefined } },
+    { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovementDistance: 0 } },
+    { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovementDistance: 2.1 } },
+    { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, playerMovementDistance: Number.NaN } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, countdownSeconds: 4 } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, countdownSeconds: 301 } },
     { type: 'configure', mapId: 'classic', seed: 1, options: { ...options, countdownSeconds: 7.5 } },

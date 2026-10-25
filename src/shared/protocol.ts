@@ -1,4 +1,9 @@
-import { COUNTDOWN_MAX_SECONDS, COUNTDOWN_MIN_SECONDS } from '../game/constants';
+import {
+  COUNTDOWN_MAX_SECONDS,
+  COUNTDOWN_MIN_SECONDS,
+  PLAYER_MOVEMENT_MAX_DISTANCE,
+  PLAYER_MOVEMENT_MIN_DISTANCE,
+} from '../game/constants';
 import type {
   GameOptions,
   GameState,
@@ -138,6 +143,10 @@ function parseOptions(raw: unknown): GameOptions | null {
     !SHOT_MODES.includes(o.shotMode as ShotMode) ||
     typeof o.preview !== 'boolean' ||
     typeof o.playerMovement !== 'boolean' ||
+    typeof o.playerMovementDistance !== 'number' ||
+    !Number.isFinite(o.playerMovementDistance) ||
+    o.playerMovementDistance < PLAYER_MOVEMENT_MIN_DISTANCE ||
+    o.playerMovementDistance > PLAYER_MOVEMENT_MAX_DISTANCE ||
     typeof o.countdownEnabled !== 'boolean' ||
     typeof o.countdownSeconds !== 'number' ||
     !Number.isInteger(o.countdownSeconds) ||
@@ -150,6 +159,7 @@ function parseOptions(raw: unknown): GameOptions | null {
     shotMode: o.shotMode as ShotMode,
     preview: o.preview,
     playerMovement: o.playerMovement,
+    playerMovementDistance: o.playerMovementDistance,
     countdownEnabled: o.countdownEnabled,
     countdownSeconds: o.countdownSeconds,
   };
