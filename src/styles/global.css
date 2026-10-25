@@ -489,8 +489,44 @@ body {
 }
 
 .lobby-shell {
+  position: relative;
+  z-index: 1;
   width: 88%;
   margin: 0 auto;
+}
+
+.bg-curves {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.bg-curves path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 14 22;
+  opacity: 0.22;
+  vector-effect: non-scaling-stroke;
+  animation: curve-flow linear infinite;
+}
+
+@keyframes curve-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -360;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-curves path {
+    animation: none;
+  }
 }
 
 .lobby-card {

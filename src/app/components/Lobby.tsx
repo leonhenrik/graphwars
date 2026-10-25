@@ -7,6 +7,7 @@ import type { GameOptions, MapId, MatchConfig } from '../../game/types';
 import type { MemberView } from '../../shared/protocol';
 import { drawScene } from './render';
 import { Avatar } from './Avatar';
+import { BackgroundCurves } from './BackgroundCurves';
 import { BrandMark } from './BrandMark';
 
 interface Props {
@@ -155,7 +156,9 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
 
   return (
     <div className="lobby-page" data-testid="lobby">
+      <BackgroundCurves />
       <div className="lobby-shell">
+
         <div className="lobby-grid">
           <header className="lobby-brand">
             <div className="brand-lockup">
