@@ -166,6 +166,14 @@ export function PlayerApp() {
         )}
       </header>
       {view.phase === 'lobby' && <div className="phone-rules">{rulesSummary(view)}</div>}
+      {view.phase === 'lobby' && (
+        <SelfieCard
+          you={you}
+          disabled={!connected}
+          onPhoto={(image) => send({ type: 'photo', image })}
+          onName={(name) => send({ type: 'name', name })}
+        />
+      )}
       {view.phase === 'lobby' && you.playerId === 1 && (
         <div className="phone-lobby-actions">
           <p>
@@ -182,14 +190,6 @@ export function PlayerApp() {
             {view.playerCount >= MIN_PLAYERS ? 'Start game' : `Need at least ${MIN_PLAYERS} players`}
           </button>
         </div>
-      )}
-      {view.phase === 'lobby' && (
-        <SelfieCard
-          you={you}
-          disabled={!connected}
-          onPhoto={(image) => send({ type: 'photo', image })}
-          onName={(name) => send({ type: 'name', name })}
-        />
       )}
       {view.phase !== 'lobby' && (
         <Calculator

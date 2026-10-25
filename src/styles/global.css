@@ -383,6 +383,7 @@ body {
 }
 
 .phone-lobby-actions {
+  margin-top: auto;
   padding: 12px;
   text-align: center;
   background: var(--panel);
