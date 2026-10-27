@@ -1688,12 +1688,6 @@ body {
   color: #315f78;
 }
 
-.qr {
-  border: 5px solid #fff9e9;
-  border-radius: 4px;
-  box-shadow: 2px 3px 0 rgba(88, 74, 48, 0.2);
-}
-
 .battlefield-canvas {
   border: 2px solid #95886d;
   border-radius: 4px 8px 5px 7px;
