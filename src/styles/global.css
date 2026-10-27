@@ -539,6 +539,18 @@ body {
   margin: 0 auto;
 }
 
+.display-token-input {
+  display: block;
+  width: 100%;
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
 .bg-curves {
   position: fixed;
   inset: 0;

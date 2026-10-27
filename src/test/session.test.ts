@@ -947,12 +947,23 @@ describe('parseClientMessage', () => {
       direction: 1,
     });
     expect(parseClientMessage({ type: 'hello', role: 'player', token: null })).not.toBeNull();
+    expect(parseClientMessage({ type: 'hello', role: 'display', token: 'host-token' })).toEqual({
+      type: 'hello',
+      role: 'display',
+      token: 'host-token',
+    });
     expect(parseClientMessage({ type: 'configure', mapId: 'scatter', seed: 5, options })).toEqual({
       type: 'configure',
       mapId: 'scatter',
       seed: 5,
       options,
     });
+
+  });
+
+  it('rejects malformed or oversized display tokens', () => {
+    expect(parseClientMessage({ type: 'hello', role: 'display', token: 42 })).toBeNull();
+    expect(parseClientMessage({ type: 'hello', role: 'display', token: 'a'.repeat(257) })).toBeNull();
   });
 
   it('accepts well-formed photo messages and rejects bad ones', () => {

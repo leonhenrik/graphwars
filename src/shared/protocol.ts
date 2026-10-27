@@ -37,7 +37,7 @@ export interface MemberView {
   photoRev: number;
 }
 
-/** URL of a player's selfie (served by the host), or null when they have none. */
+/** URL of a player's selfie, or null when they have none. */
 export function photoUrl(member: Pick<MemberView, 'playerId' | 'photoRev'>): string | null {
   return member.photoRev > 0 ? `/api/photo/${member.playerId}?v=${member.photoRev}` : null;
 }
@@ -111,7 +111,7 @@ export interface PlayerView {
 }
 
 export type ClientMessage =
-  | { type: 'hello'; role: 'display' }
+  | { type: 'hello'; role: 'display'; token?: string }
   | { type: 'hello'; role: 'player'; token: string | null }
   | { type: 'configure'; mapId: MapId; seed: number; options: GameOptions }
   | { type: 'start' }
@@ -184,7 +184,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
 
   switch (m.type) {
     case 'hello':
-      if (m.role === 'display') return { type: 'hello', role: 'display' };
+      if (m.role === 'display' && (m.token === undefined || (typeof m.token === 'string' && m.token.length <= 256))) {
+        return { type: 'hello', role: 'display', ...(typeof m.token === 'string' ? { token: m.token } : {}) };
+      }
       if (m.role === 'player' && (m.token === null || (typeof m.token === 'string' && m.token.length <= 100))) {
         return { type: 'hello', role: 'player', token: m.token };
       }

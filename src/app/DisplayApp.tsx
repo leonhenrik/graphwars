@@ -23,6 +23,9 @@ interface ServerInfo {
 export function DisplayApp() {
   const [view, setView] = useState<DisplayView | null>(null);
   const [rejected, setRejected] = useState<string | null>(null);
+  const [displayToken, setDisplayToken] = useState('');
+  const [photoUrls, setPhotoUrls] = useState<Record<number, string>>({});
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [animation, setAnimation] = useState<ShotAnimation | null>(null);
   const [effects, setEffects] = useState<Effect[]>([]);
   const [traces, setTraces] = useState<PathLine[]>([]);
@@ -52,14 +55,66 @@ export function DisplayApp() {
     }
   }, []);
 
-  const { connected, send } = useSocket(() => ({ type: 'hello', role: 'display' }), onMessage);
+  const { connected, send } = useSocket(
+    () => __VERCEL_DEPLOYMENT__
+      ? { type: 'hello', role: 'display', token: displayToken }
+      : { type: 'hello', role: 'display' },
+    onMessage,
+  );
 
   useEffect(() => {
+    if (__VERCEL_DEPLOYMENT__) return;
     fetch('/api/info')
       .then((r) => r.json() as Promise<ServerInfo>)
       .then(setInfo)
       .catch(() => setInfo(null));
   }, []);
+
+  const photoMembers = view?.members.flatMap((member) => {
+    const url = photoUrl(member);
+    return url ? [{ playerId: member.playerId, url }] : [];
+  }) ?? [];
+  const photoKey = photoMembers.map(({ playerId, url }) => `${playerId}:${url}`).join('|');
+
+  useEffect(() => {
+    setPhotoError(null);
+    if (!__VERCEL_DEPLOYMENT__) {
+      setPhotoUrls(Object.fromEntries(photoMembers.map(({ playerId, url }) => [playerId, url])));
+      return;
+    }
+    if (!displayToken || photoMembers.length === 0) {
+      setPhotoUrls({});
+      return;
+    }
+
+    const controller = new AbortController();
+    const objectUrls: string[] = [];
+    setPhotoUrls({});
+    void (async () => {
+      try {
+        const entries: Array<readonly [number, string]> = [];
+        for (const { playerId, url } of photoMembers) {
+          const response = await fetch(url, {
+            headers: { Authorization: `Bearer ${displayToken}` },
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error(`Photo request failed with status ${response.status}`);
+          const objectUrl = URL.createObjectURL(await response.blob());
+          objectUrls.push(objectUrl);
+          entries.push([playerId, objectUrl]);
+        }
+        setPhotoUrls(Object.fromEntries(entries));
+      } catch {
+        objectUrls.forEach((url) => URL.revokeObjectURL(url));
+        if (!controller.signal.aborted) setPhotoError('Unable to load player photos. Check the host access token and reconnect.');
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [photoKey, displayToken]);
 
   const completeShots = useCallback(
     (id: number) => {
@@ -100,13 +155,45 @@ export function DisplayApp() {
         <div className="lobby-card">
           <h1 className="brand">Graphwars</h1>
           <p className="menu-sub">{rejected ?? (connected ? 'Loading…' : 'Connecting to the game server…')}</p>
+          {__VERCEL_DEPLOYMENT__ && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const token = displayToken.trim();
+                if (!token) {
+                  setRejected('Enter the host access token configured in Vercel.');
+                  return;
+                }
+                setDisplayToken(token);
+                setRejected(null);
+                send({ type: 'hello', role: 'display', token });
+              }}
+            >
+              <label>
+                Host access token
+                <input
+                  className="display-token-input"
+                  type="password"
+                  autoComplete="off"
+                  required
+                  value={displayToken}
+                  onChange={(event) => setDisplayToken(event.target.value)}
+                />
+              </label>
+              <button className="btn primary" type="submit" disabled={!connected}>Connect as host</button>
+            </form>
+          )}
         </div>
       </div>
     );
   }
 
   if (view.phase === 'lobby' || !view.game) {
-    const urls = info ? info.addresses.map((a) => `http://${a}:${info.port}/play`) : [];
+    const urls = __VERCEL_DEPLOYMENT__
+      ? [`${window.location.origin}/play`]
+      : info
+        ? info.addresses.map((a) => `http://${a}:${info.port}/play`)
+        : [];
     return (
       <Lobby
         members={view.members}
@@ -126,12 +213,6 @@ export function DisplayApp() {
   const simultaneous = view.options.shotMode === 'simultaneous';
   const current = view.members.find((m) => m.playerId === game.turn.currentPlayerId);
   const colorOf = (playerId: number) => view.members.find((m) => m.playerId === playerId)?.color ?? '#fff';
-  const photos: Record<number, string> = {};
-  for (const m of view.members) {
-    const url = photoUrl(m);
-    if (url) photos[m.playerId] = url;
-  }
-
   // Turn mode: the axes follow the active player. Simultaneous mode: plain world axes.
   const originId = over || simultaneous ? null : getActiveSoldierId(game);
   const originSoldier = getSoldier(game, originId);
@@ -207,7 +288,7 @@ export function DisplayApp() {
             activeIds={waitingIds}
             lockedIds={lockedIds}
             direction={direction}
-            photos={photos}
+            photos={photoUrls}
             previews={previews}
             previewDirections={previewDirections}
             traces={traces}
@@ -258,6 +339,7 @@ export function DisplayApp() {
         <div className={`message inline ${view.notice?.kind ?? ''}`} role="status" aria-live="polite" data-testid="message">
           {view.notice?.text}
         </div>
+        {photoError && <div className="message inline error" role="status">{photoError}</div>}
         <span className="legal-copyright">© Leon Thiel, 2026</span>
         <a className="legal-notice-link" href="/impressum">Impressum &amp; Privacy Notice</a>
       </footer>

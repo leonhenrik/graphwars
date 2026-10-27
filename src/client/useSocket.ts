@@ -18,7 +18,8 @@ export function useSocket(hello: () => ClientMessage, onMessage: (message: Serve
 
     const open = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const socket = new WebSocket(`${protocol}://${window.location.host}/ws`);
+      const path = __VERCEL_DEPLOYMENT__ ? '/api/ws' : '/ws';
+      const socket = new WebSocket(`${protocol}://${window.location.host}${path}`);
       socketRef.current = socket;
       socket.onopen = () => {
         attempts = 0;
