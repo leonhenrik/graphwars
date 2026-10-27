@@ -978,6 +978,13 @@ body {
   font-size: 15px;
 }
 
+.legal-notice-link {
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
 .draft code {
   padding: 1px 6px;
   background: #0b1220;

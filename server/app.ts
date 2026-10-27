@@ -108,7 +108,7 @@ export async function startApp(options: AppOptions): Promise<App> {
       return;
     }
     if (!existsSync(file) || statSync(file).isDirectory()) {
-      // Single-page app: /play and / both serve index.html.
+      // Single-page app: /play, /impressum and / all serve index.html.
       file = path.join(staticDir, 'index.html');
     }
     if (!existsSync(file)) {
