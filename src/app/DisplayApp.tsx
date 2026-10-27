@@ -258,9 +258,8 @@ export function DisplayApp() {
         <div className={`message inline ${view.notice?.kind ?? ''}`} role="status" aria-live="polite" data-testid="message">
           {view.notice?.text}
         </div>
-        <a className="legal-notice-link" href="/impressum">
-          Impressum &amp; Privacy Notice
-        </a>
+        <span className="legal-copyright">© Leon Thiel, 2026</span>
+        <a className="legal-notice-link" href="/impressum">Impressum &amp; Privacy Notice</a>
       </footer>
 
       {over && !animation && (

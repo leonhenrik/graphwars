@@ -330,10 +330,11 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
         </div>
 
         {notice && <div className="message error" role="status">{notice}</div>}
-        <footer style={{ textAlign: 'center', marginTop: '24px', fontSize: '13px', color: 'var(--muted)' }}>
-          <a className="legal-notice-link" href="/impressum">Impressum &amp; Privacy Notice</a>
-        </footer>
       </div>
+      <footer className="legal-footer">
+        <span>© Leon Thiel, 2026</span>
+        <a className="legal-notice-link" href="/impressum">Impressum &amp; Privacy Notice</a>
+      </footer>
     </div>
   );
 }

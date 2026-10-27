@@ -519,8 +519,10 @@ body {
 
 /* ---- Lobby (laptop menu) ---- */
 .lobby-page {
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
-  padding: 28px 8px 40px;
+  padding: 28px 8px 0;
   overflow-y: auto;
   background:
     radial-gradient(900px 500px at 12% -10%, rgba(56, 189, 248, 0.18), transparent 60%),
@@ -532,6 +534,7 @@ body {
 .lobby-shell {
   position: relative;
   z-index: 1;
+  flex: 1;
   width: 88%;
   margin: 0 auto;
 }
@@ -991,6 +994,27 @@ body {
   white-space: nowrap;
 }
 
+.legal-footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 20px;
+  margin: 24px -8px 0;
+  padding: 10px 8px;
+  background: rgba(48, 47, 41, 0.08);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.legal-copyright {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .draft code {
   padding: 1px 6px;
   background: #0b1220;
@@ -1315,6 +1339,10 @@ body {
 .statusbar {
   background: rgba(248, 241, 223, 0.96);
   border-color: #b8aa8c;
+}
+
+.statusbar {
+  background: rgba(48, 47, 41, 0.08);
 }
 
 .header,
