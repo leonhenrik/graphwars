@@ -635,7 +635,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 18px;
-  align-items: center;
+  align-items: start;
 }
 
 .lobby-brand {
@@ -767,6 +767,12 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
+}
+
+.lobby-maps {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .map-card {
@@ -1123,6 +1129,36 @@ body {
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 1101px) {
+  .lobby-join-col {
+    align-self: stretch;
+  }
+
+  .lobby-join-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .lobby-join-panel .join-card {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .lobby-join-panel .qr {
+    flex: 1;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    object-fit: contain;
+  }
+
+  .lobby-join-panel .join-text {
+    flex: none;
+  }
 }
 
 .join-text {

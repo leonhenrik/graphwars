@@ -178,8 +178,8 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
             <p className="menu-sub">Phones are the calculators, this screen is the battlefield.</p>
           </header>
 
-          <div className="lobby-col">
-            <Panel title="Join with your phone" step="1">
+          <div className="lobby-col lobby-join-col">
+            <Panel title="Join with your phone" step="1" className="lobby-join-panel">
               <JoinCard urls={joinUrls} />
             </Panel>
 
@@ -213,7 +213,7 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
           </div>
 
           <div className="lobby-col">
-            <Panel title="Rules" step="3">
+            <Panel title="Game Setup" step="3">
               <Segmented
                 testId="rule-mode"
                 label="Shot order"
@@ -294,10 +294,8 @@ export function Lobby({ members, mapId, seed, options, joinUrls, onConfigure, on
                 />
                 <span className="slider-value">{options.countdownSeconds}s</span>
               </div>
-            </Panel>
 
-            <Panel title="Map" step="4" className="maps-panel">
-              <div className="maps" role="radiogroup" aria-label="Map">
+              <div className="maps lobby-maps" role="radiogroup" aria-label="Map">
                 {MAPS.map((map) => {
                   const selected = mapId === map.id;
                   const regenerable = map.id === 'scatter' || map.id === 'chaos';
