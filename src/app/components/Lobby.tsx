@@ -72,7 +72,7 @@ function JoinCard({ urls }: { urls: string[] }) {
       return;
     }
     let cancelled = false;
-    QRCode.toDataURL(url, { margin: 1, width: 960, color: { dark: '#0b1220', light: '#ffffff' } })
+    QRCode.toDataURL(url, { margin: 1, width: 960, color: { dark: '#0b1220', light: '#00000000' } })
       .then((data) => !cancelled && setQr(data))
       .catch(() => !cancelled && setQr(null));
     return () => {

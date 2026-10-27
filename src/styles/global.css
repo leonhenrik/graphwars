@@ -1126,9 +1126,6 @@ body {
 .qr {
   width: 100%;
   max-width: 360px;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
 @media (min-width: 1101px) {
@@ -1149,6 +1146,7 @@ body {
   }
 
   .lobby-join-panel .qr {
+    contain: size;
     flex: 1;
     width: 100%;
     max-width: none;
